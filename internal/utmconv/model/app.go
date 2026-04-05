@@ -2,7 +2,7 @@ package model
 
 type App struct {
 	Filename      string
-	Utm           string
+	Vendor        string
 	To            string
 	Addresses     []Address
 	AddressGroups []AddressGroup
