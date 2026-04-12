@@ -7,4 +7,5 @@ type App struct {
 	Tag           []Tag
 	Addresses     []Address
 	AddressGroups []AddressGroup
+	Policies      []Policy
 }

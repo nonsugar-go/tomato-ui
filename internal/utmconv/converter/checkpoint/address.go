@@ -4,13 +4,24 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
+	"strings"
 
+	"github.com/nonsugar-go/tomato-ui/internal/utmconv/ip"
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
 )
 
 func ConvertAddresses(addrs []model.Address) ([]string, error) {
 	var results []string
 	var errs []error
+
+	sort.SliceStable(addrs, func(i, j int) bool {
+		a, b := addrs[i], addrs[j]
+		if a.Type != b.Type {
+			return a.Type < b.Type
+		}
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+	})
 
 	for _, addr := range addrs {
 		line, err := ConvertAddress(addr)
@@ -26,36 +37,65 @@ func ConvertAddresses(addrs []model.Address) ([]string, error) {
 
 func ConvertAddress(addr model.Address) (string, error) {
 	comment := buildComment(addr.Description)
+	tags := buildTags(addr.Tags)
 
 	switch addr.Type {
 
 	case "ip-netmask":
-		ip, ipnet, err := net.ParseCIDR(addr.Value)
-		if err == nil {
-			ones, _ := ipnet.Mask.Size()
-			if ones == 32 {
+		if ip.IsIPv4(addr.Value) {
+			if ip.IsIPv4Host(addr.Value) {
+				ipaddr := addr.Value
+				ip, _, err := net.ParseCIDR(ipaddr)
+				if err == nil {
+					ipaddr = ip.String()
+				}
 				// host
 				return fmt.Sprintf(
-					"add host name \"%s\" ip-address %s%s",
-					addr.Name, ip.String(), comment,
+					"add host name \"%s\" ipv4-address %s%s%s",
+					addr.Name, ipaddr, comment, tags,
 				), nil
 			}
-			return fmt.Sprintf(
-				"add network name \"%s\" subnet %s mask-length %d%s",
-				addr.Name, ip.String(), ones, comment,
-			), nil
+			ip, ipnet, err := net.ParseCIDR(addr.Value)
+			if err == nil {
+				length, _ := ipnet.Mask.Size()
+				return fmt.Sprintf(
+					"add network name \"%s\" subnet4 %s mask-length4 %d%s%s",
+					addr.Name, ip.String(), length, comment, tags,
+				), nil
+			} else {
+				return "", fmt.Errorf("invalid IP address: %s", addr.Value)
+			}
+		} else if ip.IsIPv6(addr.Value) {
+			if ip.IsIPv6Host(addr.Value) { // NOTE: untested
+				ipaddr := addr.Value
+				ip, _, err := net.ParseCIDR(ipaddr)
+				if err == nil {
+					ipaddr = ip.String()
+				}
+				// host
+				return fmt.Sprintf(
+					"add host name \"%s\" ipv6-address %s%s%s",
+					addr.Name, ipaddr, comment, tags,
+				), nil
+			}
+			ip, ipnet, err := net.ParseCIDR(addr.Value)
+			if err == nil {
+				length, _ := ipnet.Mask.Size()
+				return fmt.Sprintf(
+					"add network name \"%s\" subnet6 %s mask-length6 %d%s%s",
+					addr.Name, ip.String(), length, comment, tags,
+				), nil
+			} else {
+				return "", fmt.Errorf("invalid IP address: %s", addr.Value)
+			}
 		} else {
-			// host
-			return fmt.Sprintf(
-				"add host name \"%s\" ip-address %s%s",
-				addr.Name, addr.Value, comment,
-			), nil
+			return "", fmt.Errorf("invalid IP address: %s", addr.Value)
 		}
 
 	case "fqdn":
 		return fmt.Sprintf(
-			"add dns-domain name \".%s\" is-sub-domain false %s",
-			addr.Value, comment,
+			"add dns-domain name \".%s\" is-sub-domain false%s%s",
+			addr.Value, comment, tags,
 		), nil
 
 	default:
@@ -66,6 +106,10 @@ func ConvertAddress(addr model.Address) (string, error) {
 func ConvertAddressGroups(groups []model.AddressGroup) ([]string, error) {
 	var results []string
 	var errs []error
+
+	sort.SliceStable(groups, func(i, j int) bool {
+		return strings.ToLower(groups[i].Name) < strings.ToLower(groups[j].Name)
+	})
 
 	for _, g := range groups {
 		line, err := ConvertAddressGroup(g)
