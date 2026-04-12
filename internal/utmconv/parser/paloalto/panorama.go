@@ -3,202 +3,33 @@ package paloalto
 import (
 	"encoding/xml"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/exporter/excel"
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
 )
 
-type PaloAltoConfig struct {
-	Addresses     []ScopedAddress
-	AddressGroups []ScopedAddressGroup
-	Services      []ScopedService
-	SecurityRules []ScopedSecurity
-	NATRules      []ScopedNAT
-}
-
-type ScopedAddress struct {
-	Scope   string // shared / dg
-	Address Address
-}
-
-type ScopedAddressGroup struct {
-	Scope string // shared / dg
-	Group AddressGroup
-}
-
-type ScopedService struct {
-	Scope   string // shared / dg
-	Service Service
-}
-
-type ScopedSecurity struct {
-	Scope        string // shared / dg
-	Rulebase     string // pre / post
-	SecurityRule SecurityRule
-}
-
-type ScopedNAT struct {
-	Scope    string // shared / dg
-	Rulebase string // pre / post
-	NATRule  NATRule
-}
-
-type Config struct {
-	Shared   Shared   `xml:"shared"`
-	Devices  Devices  `xml:"devices"`
-	Policies Policies `xml:"policies"`
-}
-
-type Shared struct {
-	Addresses         []Address          `xml:"address>entry"`
-	AddressGroups     []AddressGroup     `xml:"address-group>entry"`
-	Services          []Service          `xml:"service>entry"`
-	ServiceGroups     []ServiceGroup     `xml:"service-group>entry"`
-	Applications      []Application      `xml:"application>entry"`
-	ApplicationGroups []ApplicationGroup `xml:"application-group>entry"`
-	PreRulebase       Rulebase           `xml:"pre-rulebase"`
-	PostRulebase      Rulebase           `xml:"post-rulebase"`
-}
-
-type Devices struct {
-	DeviceGroups []DeviceGroup `xml:"entry>device-group>entry"`
-}
-
-type DeviceGroup struct {
-	Name              string             `xml:"name,attr"`
-	Addresses         []Address          `xml:"address>entry"`
-	AddressGroups     []AddressGroup     `xml:"address-group>entry"`
-	Services          []Service          `xml:"service>entry"`
-	ServiceGroups     []ServiceGroup     `xml:"service-group>entry"`
-	Applications      []Application      `xml:"application>entry"`
-	ApplicationGroups []ApplicationGroup `xml:"application-group>entry"`
-	PreRulebase       Rulebase           `xml:"pre-rulebase"`
-	PostRulebase      Rulebase           `xml:"post-rulebase"`
-}
-
-type Rulebase struct {
-	Security Security `xml:"security"`
-	Nat      NAT      `xml:"nat"`
-}
-
-type Policies struct {
-	Security Security `xml:"security"`
-}
-
-type Address struct {
-	Name        string `xml:"name,attr"`
-	IPNetmask   string `xml:"ip-netmask"`
-	FQDN        string `xml:"fqdn"`
-	Description string `xml:"description"`
-}
-
-type AddressGroup struct {
-	Name    string   `xml:"name,attr"`
-	Static  []string `xml:"static>member"`
-	Dynamic *Dynamic `xml:"dynamic"`
-}
-
-type Dynamic struct {
-	Filter string `xml:"filter"`
-}
-
-type Service struct {
-	Name     string   `xml:"name,attr"`
-	Protocol Protocol `xml:"protocol"`
-}
-
-type Protocol struct {
-	TCP *TCP `xml:"tcp"`
-	UDP *UDP `xml:"udp"`
-}
-
-type TCP struct {
-	Port string `xml:"port"`
-}
-
-type UDP struct {
-	Port string `xml:"port"`
-}
-
-type Security struct {
-	Rules []SecurityRule `xml:"rules>entry"`
-}
-
-type ServiceGroup struct {
-	Name    string   `xml:"name,attr"`
-	Members []string `xml:"members>member"`
-}
-
-type Application struct {
-	Name        string `xml:"name,attr"`
-	Category    string `xml:"category"`
-	Subcategory string `xml:"subcategory"`
-	Technology  string `xml:"technology"`
-	Risk        string `xml:"risk"`
-	Description string `xml:"description"`
-}
-
-type ApplicationGroup struct {
-	Name    string   `xml:"name,attr"`
-	Members []string `xml:"members>member"`
-}
-
-type SecurityRule struct {
-	Name         string   `xml:"name,attr"`
-	FromZones    []string `xml:"from>member"`
-	ToZones      []string `xml:"to>member"`
-	Sources      []string `xml:"source>member"`
-	Destinations []string `xml:"destination>member"`
-	Applications []string `xml:"application>member"`
-	Services     []string `xml:"service>member"`
-	Action       string   `xml:"action"`
-	Description  string   `xml:"description"`
-	Tags         []string `xml:"tag>member"`
-}
-
-type NAT struct {
-	Rules []NATRule `xml:"rules>entry"`
-}
-
-type NATRule struct {
-	Name         string   `xml:"name,attr"`
-	FromZones    []string `xml:"from>member"`
-	ToZones      []string `xml:"to>member"`
-	Sources      []string `xml:"source>member"`
-	Destinations []string `xml:"destination>member"`
-	Service      string   `xml:"service"`
-
-	// Source NAT
-	SourceTranslation *SourceTranslation `xml:"source-translation"`
-
-	// Destination NAT
-	DestinationTranslation *DestinationTranslation `xml:"destination-translation"`
-
-	Description string `xml:"description"`
-}
-
-type SourceTranslation struct {
-	DynamicIPAndPort *DynamicIPAndPort `xml:"dynamic-ip-and-port"`
-	StaticIP         *StaticIP         `xml:"static-ip"`
-}
-
-type DynamicIPAndPort struct {
-	TranslatedAddress []string `xml:"translated-address>member"`
-}
-
-type StaticIP struct {
-	TranslatedAddress string `xml:"translated-address"`
-}
-
-type DestinationTranslation struct {
-	TranslatedAddress string `xml:"translated-address"`
-	TranslatedPort    string `xml:"translated-port"`
-}
-
 func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 	var result PaloAltoConfig
+
+	for _, tag := range c.Shared.Tags {
+		result.TagObject = append(result.TagObject, ScopedTagObject{
+			Scope:     "shared",
+			TagObject: tag,
+		})
+	}
+
+	for _, dg := range c.Devices.DeviceGroups {
+		for _, tag := range dg.Tags {
+			result.TagObject = append(result.TagObject, ScopedTagObject{
+				Scope:     dg.Name,
+				TagObject: tag,
+			})
+		}
+	}
 
 	for _, addr := range c.Shared.Addresses {
 		result.Addresses = append(result.Addresses, ScopedAddress{
@@ -251,53 +82,80 @@ func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 	return &result
 }
 
+func printTags(scope string, tags []TagObject, e *excel.Excel) {
+	sort.Slice(tags, func(i, j int) bool {
+		return tags[i].Name < tags[j].Name
+	})
+
+	for _, tag := range tags {
+		e.Println(scope, tag.Name, tag.Color, colorName(tag.Color), tag.Comments)
+	}
+}
+
+func colorName(code string) string {
+	if name, ok := colorMap[code]; ok {
+		return name
+	}
+	return code
+}
+
 func printAddresses(scope string, addrs []Address, e *excel.Excel) {
 	for _, addr := range addrs {
-		e.Println(
-			scope,
-			addr.Name,
-			addr.IPNetmask,
-			addr.FQDN,
-			addr.Description,
-		)
+		typ, value := resolveAddress(addr)
+
+		e.Println(scope, addr.Name, typ, value, strings.Join(addr.Tags, ";"), addr.Description)
+	}
+}
+
+func resolveAddress(addr Address) (string, string) {
+	switch {
+	case addr.IPNetmask != "":
+		return "ip-netmask", addr.IPNetmask
+	case addr.IPRange != "": // NOTE: untested
+		return "ip-range", addr.IPRange
+	case addr.IPWildcard != "": // NOTE: untested
+		return "ip-wildcard", addr.IPWildcard
+	case addr.FQDN != "":
+		return "fqdn", addr.FQDN
+	default:
+		return "unknown", ""
 	}
 }
 
 func printAddressGroups(scope string, groups []AddressGroup, e *excel.Excel) {
 	for _, g := range groups {
-		staticMembers := fmt.Sprintf("%v", g.Static)
-		dynamicFilter := ""
-		if g.Dynamic != nil {
-			dynamicFilter = g.Dynamic.Filter
-		}
-		e.Println(
-			scope,
-			g.Name,
-			staticMembers,
-			dynamicFilter,
-		)
+		typ, value := resolveGroup(g)
+
+		e.Println(scope, g.Name, typ, value, strings.Join(g.Tags, ";"), g.Description)
 	}
+}
+
+func resolveGroup(g AddressGroup) (string, string) {
+	if len(g.Static) > 0 {
+		return "static", strings.Join(g.Static, ";")
+	}
+	if g.Dynamic != nil { // NOTE: untested
+		return "dynamic", g.Dynamic.Filter
+	}
+	return "unknown", ""
 }
 
 func printServices(scope string, services []Service, e *excel.Excel) {
 	for _, svc := range services {
-		proto := ""
-		port := ""
-		if svc.Protocol.TCP != nil {
-			proto = "tcp"
-			port = svc.Protocol.TCP.Port
-		}
-		if svc.Protocol.UDP != nil {
-			proto = "udp"
-			port = svc.Protocol.UDP.Port
-		}
-		e.Println(
-			scope,
-			svc.Name,
-			proto,
-			port,
-		)
+		proto, port, srcPort := resolveService(svc)
+
+		e.Println(scope, svc.Name, proto, port, srcPort, strings.Join(svc.Tags, ","), svc.Description)
 	}
+}
+
+func resolveService(svc Service) (string, string, string) {
+	if svc.Protocol.TCP != nil {
+		return "tcp", svc.Protocol.TCP.Port, svc.Protocol.TCP.SourcePort
+	}
+	if svc.Protocol.UDP != nil {
+		return "udp", svc.Protocol.UDP.Port, svc.Protocol.UDP.SourcePort
+	}
+	return "unknown", "", ""
 }
 
 func printServiceGroups(scope string, groups []ServiceGroup, e *excel.Excel) {
@@ -305,81 +163,179 @@ func printServiceGroups(scope string, groups []ServiceGroup, e *excel.Excel) {
 		e.Println(
 			scope,
 			g.Name,
-			fmt.Sprintf("%v", g.Members),
+			strings.Join(g.Members, ";"),
+			strings.Join(g.Tags, ";"),
+			g.Description,
 		)
 	}
 }
 
 func printApplications(scope string, apps []Application, e *excel.Excel) {
 	for _, app := range apps {
-		e.Println(
-			scope,
-			app.Name,
-			app.Category,
-			app.Subcategory,
-			app.Technology,
-			app.Risk,
-			app.Description,
-		)
+		port := ""
+		if app.Default != nil {
+			port = app.Default.Port
+		}
+
+		e.Println(scope, app.Name, app.Category, app.Subcategory, app.Technology,
+			app.Risk, port, strings.Join(app.Tags, ";"), app.Description)
 	}
 }
 
 func printApplicationGroups(scope string, groups []ApplicationGroup, e *excel.Excel) {
 	for _, g := range groups {
-		e.Println(
-			scope,
-			g.Name,
-			fmt.Sprintf("%v", g.Members),
-		)
+		e.Println(scope, g.Name, strings.Join(g.Members, ";"), strings.Join(g.Tags, ","), g.Description)
 	}
 }
 
 func printSecurityRules(scope string, rules []SecurityRule, e *excel.Excel) {
 	for _, rule := range rules {
-		e.Println(
-			scope,
-			rule.Name,
-			fmt.Sprintf("%v", rule.FromZones),
-			fmt.Sprintf("%v", rule.ToZones),
-			fmt.Sprintf("%v", rule.Sources),
-			fmt.Sprintf("%v", rule.Destinations),
-			fmt.Sprintf("%v", rule.Applications),
-			fmt.Sprintf("%v", rule.Services),
-			rule.Action,
-			fmt.Sprintf("%v", rule.Tags),
-			rule.Description,
-		)
+
+		from := strings.Join(rule.FromZones, ";")
+		to := strings.Join(rule.ToZones, ";")
+		src := strings.Join(rule.Sources, ";")
+		dst := strings.Join(rule.Destinations, ";")
+		app := strings.Join(rule.Applications, ";")
+		svc := strings.Join(rule.Services, ";")
+		sourceUsers := strings.Join(rule.SourceUsers, ";")
+		categories := strings.Join(rule.Categories, ";")
+		tags := strings.Join(rule.Tags, ";")
+
+		if rule.NegateSource == "yes" {
+			src = "NOT(" + src + ")"
+		}
+		if rule.NegateDestination == "yes" {
+			dst = "NOT(" + dst + ")"
+		}
+
+		srcHIP := strings.Join(rule.SourceHIP, ";")
+		dstHIP := strings.Join(rule.DestinationHIP, ";")
+
+		profileGroup := ""
+		if rule.ProfileSetting != nil {
+			if len(rule.ProfileSetting.Group) > 0 {
+				profileGroup = strings.Join(rule.ProfileSetting.Group, ";")
+			} else if rule.ProfileSetting.Profiles != nil {
+				profileGroup = expandProfiles(rule.ProfileSetting.Profiles)
+			}
+		}
+
+		target := "all"
+
+		if rule.Target != nil {
+			var devs []string
+			for _, d := range rule.Target.Devices {
+				devs = append(devs, d.Name)
+			}
+
+			if len(devs) > 0 {
+				if rule.Target.Negate == "yes" {
+					target = "NOT(" + strings.Join(devs, ";") + ")"
+				} else {
+					target = strings.Join(devs, ";")
+				}
+			}
+		}
+
+		e.Println(scope, rule.Name, tags, rule.GroupTag,
+			from, to, src, dst, app, svc, rule.Action,
+			rule.Disabled, rule.LogStart, rule.LogEnd, rule.LogSetting,
+			rule.Schedule, sourceUsers, categories, srcHIP, dstHIP,
+			profileGroup, target, rule.Description)
 	}
+}
+
+func expandProfiles(p *Profiles) string {
+	if p == nil {
+		return ""
+	}
+
+	var parts []string
+
+	add := func(name string, v []string) {
+		if len(v) == 0 {
+			return
+		}
+		parts = append(parts, name+"="+strings.Join(v, ";"))
+	}
+
+	add("AV", p.AV)
+	add("AS", p.AS)
+	add("VP", p.VP)
+	add("URL", p.URL)
+	add("FB", p.FB)
+	add("DF", p.DF)
+	add("WFA", p.WFA)
+
+	return strings.Join(parts, " ")
 }
 
 func printNatRules(scope string, rules []NATRule, e *excel.Excel) {
 	for _, rule := range rules {
 
+		// ----------------------------
+		// Source NAT
+		// ----------------------------
 		srcTrans := ""
+
 		if rule.SourceTranslation != nil {
-			if rule.SourceTranslation.DynamicIPAndPort != nil {
-				srcTrans = fmt.Sprintf("DIPP:%v",
-					rule.SourceTranslation.DynamicIPAndPort.TranslatedAddress)
-			}
-			if rule.SourceTranslation.StaticIP != nil {
-				srcTrans = "Static:" + rule.SourceTranslation.StaticIP.TranslatedAddress
+			switch {
+			case rule.SourceTranslation.DynamicIPAndPort != nil:
+				d := rule.SourceTranslation.DynamicIPAndPort
+
+				// Interface NAT
+				if d.InterfaceAddress != nil {
+					srcTrans = fmt.Sprintf(
+						"Interface:%s IP:%s Floating:%s",
+						d.InterfaceAddress.Interface,
+						d.InterfaceAddress.Ip,
+						d.InterfaceAddress.FloatingIp,
+					)
+				} else {
+					// Dynamic IP and Port NAT
+					srcTrans = "DIPP:" + strings.Join(d.TranslatedAddress, ",")
+				}
+
+			case rule.SourceTranslation.StaticIP != nil:
+				s := rule.SourceTranslation.StaticIP
+				srcTrans = fmt.Sprintf(
+					"Static:%s BiDir:%s",
+					s.TranslatedAddress,
+					s.BiDirectional,
+				)
 			}
 		}
 
+		// ----------------------------
+		// Destination NAT
+		// ----------------------------
 		dstTrans := ""
+
 		if rule.DestinationTranslation != nil {
-			dstTrans = fmt.Sprintf("%s:%s",
-				rule.DestinationTranslation.TranslatedAddress,
-				rule.DestinationTranslation.TranslatedPort)
+			d := rule.DestinationTranslation
+
+			switch {
+			case d.TranslatedAddress != "" && d.TranslatedPort != "":
+				dstTrans = fmt.Sprintf("%s:%s",
+					d.TranslatedAddress,
+					d.TranslatedPort,
+				)
+
+			case d.TranslatedAddress != "":
+				dstTrans = d.TranslatedAddress
+			}
 		}
 
+		// ----------------------------
+		// Output row
+		// ----------------------------
 		e.Println(
 			scope,
 			rule.Name,
-			fmt.Sprintf("%v", rule.FromZones),
-			fmt.Sprintf("%v", rule.ToZones),
-			fmt.Sprintf("%v", rule.Sources),
-			fmt.Sprintf("%v", rule.Destinations),
+			strings.Join(rule.FromZones, ";"),
+			strings.Join(rule.ToZones, ";"),
+			strings.Join(rule.Sources, ";"),
+			strings.Join(rule.Destinations, ";"),
 			rule.Service,
 			srcTrans,
 			dstTrans,
@@ -407,7 +363,8 @@ func ParsePanorama(app *model.App) {
 	var err error
 
 	if config, err = parseXML(app.Filename); err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to parse XML", "error", err)
+		os.Exit(1)
 	}
 
 	panoramaConfig := BuildPaloAltoConfig(config)
@@ -416,16 +373,24 @@ func ParsePanorama(app *model.App) {
 	e := excel.NewExcel("panorama.xlsx")
 	defer e.Close()
 
+	e.NewSheet("Tags")
+	e.Println("Scope", "Name", "Color", "Color Name", "Comments")
+	printTags("shared", config.Shared.Tags, e)
+	for _, dg := range config.Devices.DeviceGroups {
+		printTags(dg.Name, dg.Tags, e)
+	}
+	e.AddTable()
+
 	e.NewSheet("Addresses")
-	e.Println("Scope", "Name", "IP/Netmask", "FQDN", "Description")
-	printAddresses("shared", config.Shared.Addresses, e)
+	e.Println("Scope", "Name", "Type", "Value", "Tags", "Description")
+	printAddresses("shared", config.Shared.Addresses, e) // NOTE: untested
 	for _, dg := range config.Devices.DeviceGroups {
 		printAddresses(dg.Name, dg.Addresses, e)
 	}
 	e.AddTable()
 
 	e.NewSheet("Address Groups")
-	e.Println("Scope", "Name", "Static Members", "Dynamic Filter")
+	e.Println("Scope", "Name", "Type", "Value", "Tags", "Description")
 	printAddressGroups("shared", config.Shared.AddressGroups, e)
 	for _, dg := range config.Devices.DeviceGroups {
 		printAddressGroups(dg.Name, dg.AddressGroups, e)
@@ -433,7 +398,7 @@ func ParsePanorama(app *model.App) {
 	e.AddTable()
 
 	e.NewSheet("Services")
-	e.Println("Scope", "Name", "Protocol", "Port")
+	e.Println("Scope", "Name", "Protocol", "Port", "SourcePort", "Tags", "Description")
 	printServices("shared", config.Shared.Services, e)
 	for _, dg := range config.Devices.DeviceGroups {
 		printServices(dg.Name, dg.Services, e)
@@ -441,7 +406,7 @@ func ParsePanorama(app *model.App) {
 	e.AddTable()
 
 	e.NewSheet("Service Groups")
-	e.Println("Scope", "Name", "Members")
+	e.Println("Scope", "Name", "Value", "Tags", "Description")
 	printServiceGroups("shared", config.Shared.ServiceGroups, e)
 	for _, dg := range config.Devices.DeviceGroups {
 		printServiceGroups(dg.Name, dg.ServiceGroups, e)
@@ -449,7 +414,9 @@ func ParsePanorama(app *model.App) {
 	e.AddTable()
 
 	e.NewSheet("Applications")
-	e.Println("Scope", "Name", "Category", "Subcategory", "Technology", "Risk", "Description")
+	e.Println("Scope", "Name", "Category", "Subcategory", "Technology", "Risk",
+		"Port", "Tags", "Description",
+	)
 	printApplications("shared", config.Shared.Applications, e)
 	for _, dg := range config.Devices.DeviceGroups {
 		printApplications(dg.Name, dg.Applications, e)
@@ -457,7 +424,7 @@ func ParsePanorama(app *model.App) {
 	e.AddTable()
 
 	e.NewSheet("Application Groups")
-	e.Println("Scope", "Name", "Members")
+	e.Println("Scope", "Name", "Members", "Tags", "Description")
 	printApplicationGroups("shared", config.Shared.ApplicationGroups, e)
 	for _, dg := range config.Devices.DeviceGroups {
 		printApplicationGroups(dg.Name, dg.ApplicationGroups, e)
@@ -465,8 +432,10 @@ func ParsePanorama(app *model.App) {
 	e.AddTable()
 
 	e.NewSheet("Security Rules")
-	e.Println("名前", "From", "To", "Source", "Destination", "Application",
-		"Service", "Action", "Tag", "Description")
+	e.Println("Scope", "Name", "Tags", "GroupTag", "From", "To", "Source", "Destination", "Application",
+		"Service", "Action", "Disabled", "LogStart", "LogEnd", "LogSetting", "Schedule", "SourceUser",
+		"Category", "SourceHIP", "DestinationHIP", "Profile", "Target", "Description")
+
 	printSecurityRules("shared-pre", config.Shared.PreRulebase.Security.Rules, e)
 	printSecurityRules("shared-post", config.Shared.PostRulebase.Security.Rules, e)
 	for _, dg := range config.Devices.DeviceGroups {
@@ -476,8 +445,8 @@ func ParsePanorama(app *model.App) {
 	e.AddTable()
 
 	e.NewSheet("NAT Rules")
-	e.Println("Scope", "Name", "From", "To", "Source", "Destination",
-		"Service", "Src Trans", "Dst Trans", "Description")
+	e.Println("Scope", "Name", "From Zones", "To Zones", "Sources", "Destinations",
+		"Service", "Source Translation", "Destination Translation", "Description")
 	printNatRules("shared-pre", config.Shared.PreRulebase.Nat.Rules, e)
 	printNatRules("shared-post", config.Shared.PostRulebase.Nat.Rules, e)
 	for _, dg := range config.Devices.DeviceGroups {

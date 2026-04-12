@@ -54,8 +54,8 @@ func ConvertAddress(addr model.Address) (string, error) {
 
 	case "fqdn":
 		return fmt.Sprintf(
-			"add dns-domain name \"%s\" domain-name %s%s",
-			addr.Name, addr.Value, comment,
+			"add dns-domain name \".%s\" is-sub-domain false %s",
+			addr.Value, comment,
 		), nil
 
 	default:

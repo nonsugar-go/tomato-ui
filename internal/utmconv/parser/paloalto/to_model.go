@@ -7,6 +7,10 @@ import (
 func fillModel(app *model.App, palo *PaloAltoConfig) error {
 	var err error
 
+	if app.Tag, err = ToModelTags(palo.TagObject); err != nil {
+		return err
+	}
+
 	if app.Addresses, err = ToModelAddresses(palo.Addresses); err != nil {
 		return err
 	}
@@ -20,6 +24,26 @@ func fillModel(app *model.App, palo *PaloAltoConfig) error {
 	// app.NATRules, err = ...
 
 	return nil
+}
+
+// ToModelTags converts Palo Alto tag objects to model tags.
+// NOTE: untested
+func ToModelTags(tagObjects []ScopedTagObject) ([]model.Tag, error) {
+	var result []model.Tag
+
+	for _, st := range tagObjects {
+		t := st.TagObject
+
+		tag := model.Tag{
+			Value:       t.Name,
+			Color:       t.Color,
+			Description: t.Comments,
+		}
+
+		result = append(result, tag)
+	}
+
+	return result, nil
 }
 
 func ToModelAddresses(scopedAddrs []ScopedAddress) ([]model.Address, error) {

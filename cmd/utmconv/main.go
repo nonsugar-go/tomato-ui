@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/converter/checkpoint"
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
@@ -20,48 +21,81 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// メッセージの定義
 type tickMsg time.Time
 
 type modelTUI struct {
-	spinner  spinner.Model
-	loading  bool
-	quitting bool
+	spinner   spinner.Model
+	loading   bool
+	quitting  bool
+	fadeStep  int
+	fadingOut bool
+	mode      string
 }
 
 func initialModel() modelTUI {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("204")) // トマト色
-	return modelTUI{spinner: s, loading: true}
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+	return modelTUI{
+		spinner: s,
+		loading: true,
+		mode:    "splash",
+	}
 }
 
 func (m modelTUI) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
-		// 2秒後に終了するコマンド（実際はここで初期化処理を行う）
 		func() tea.Msg {
-			time.Sleep(2 * time.Second)
+			// time.Sleep(2 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 			return tickMsg{}
 		},
 	)
 }
 
 func (m modelTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var spinnerColors = []string{"196", "202", "208", "214"}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.String() == "q" || msg.String() == "ctrl+c" {
 			m.quitting = true
 			return m, tea.Quit
 		}
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
+
+		idx := int(time.Now().UnixNano()/1e8) % len(spinnerColors)
+		m.spinner.Style = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(spinnerColors[idx]))
+
 		return m, cmd
+
 	case tickMsg:
-		m.loading = false
-		return m, tea.Quit // 起動完了。本来はここでメイン画面のModelへ切り替える
+		m.fadingOut = true
+		return m, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+			return t
+		})
+
+	case time.Time:
+		if m.fadingOut {
+			m.fadeStep++
+
+			if m.fadeStep > 10 {
+				m.fadingOut = false
+				m.mode = "header"
+				return m, tea.Quit
+			}
+
+			return m, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+				return t
+			})
+		}
 	}
+
 	return m, nil
 }
 
@@ -70,41 +104,129 @@ func (m modelTUI) View() string {
 		return ""
 	}
 
-	logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6347")).Padding(0, 1)
-	tomato := "🍅"
+	switch m.mode {
+	case "splash":
+		if m.fadingOut {
+			return m.fadeView()
+		}
+		return m.splashView()
 
+	case "header":
+		return m.headerView()
+	}
+
+	return ""
+}
+
+func (m modelTUI) splashView() string {
 	logoText := `
-  _____                          _             _   _ ___ 
- |_   _|__  _ __ ___   __ _ _ __| |_ ___      | | | |_ _|
-   | |/ _ \| '_ ' _ \ / _' | '__| __/ _ \_____| | | || | 
-   | | (_) | | | | | | (_| | |  | || (_) |_____| |_| || | 
-   |_|\___/|_| |_| |_|\__,_|_|   \__\___/      \___/|___|`
+	_____                          _             _   _ ___ 
+	|_   _|__  _ __ ___   __ _ _ __| |_ ___      | | | |_ _|
+	| |/ _ \| '_ ' _ \ / _' | '__| __/ _ \_____| | | || | 
+	| | (_) | | | | | | (_| | |  | || (_) |_____| |_| || | 
+	|_|\___/|_| |_| |_|\__,_|_|   \__\___/      \___/|___|`
 
-	// 上下のトマト列を作る
-	topRow := lipgloss.NewStyle().MarginLeft(4).Render("🍅 🍅 🍅 🍅 🍅 🍅 🍅 🍅 🍅")
-	bottomRow := lipgloss.NewStyle().MarginLeft(4).Render("🍅 🍅 🍅 🍅 🍅 🍅 🍅 🍅 🍅")
+	utmText := `
+	_   _ _ __ ___   ___ ___  _ __ __   __
+	| | | | '_ ' _ \ / __/ _ \| '_ \\ \ / /
+	| |_| | | | | | | (_| (_) | | | |\ V / 
+	\___/|_| |_| |_|\___\___/|_| |_| \_/  
+	`
 
-	// ロゴの左右にトマトを配置
-	middleRow := lipgloss.JoinHorizontal(
-		lipgloss.Center,
-		tomato,
-		logoStyle.Render(logoText),
-		tomato,
-	)
+	colors := []string{"196", "202", "208", "214", "220"}
 
-	// スピナーとテキストの結合
-	loadingMsg := fmt.Sprintf("\n  %s  Initializing Tomato Systems...", m.spinner.View())
+	logoLines := strings.Split(strings.Trim("\n"+logoText, "\n"), "\n")
+	var coloredLogo []string
+	for i, line := range logoLines {
+		color := colors[i%len(colors)]
+		style := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(color)).
+			Align(lipgloss.Center)
+		coloredLogo = append(coloredLogo, style.Render(line))
+	}
+	logoBlock := strings.Join(coloredLogo, "\n")
 
-	// 全体を垂直に結合
+	logoWidth := lipgloss.Width(logoBlock)
+
+	utmStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("212")).
+		Align(lipgloss.Center).
+		Width(logoWidth)
+
+	utmBlock := utmStyle.Render(utmText)
+
+	tomatoLine := lipgloss.NewStyle().
+		Width(logoWidth).
+		Align(lipgloss.Center).
+		Render(strings.Repeat("🍅 ", logoWidth/4))
+
+	loadingMsg := lipgloss.NewStyle().
+		Width(logoWidth).
+		Align(lipgloss.Center).
+		Render(fmt.Sprintf("%s  Initializing Tomato Systems...", m.spinner.View()))
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Center,
-		topRow,
-		middleRow,
-		bottomRow,
+		logoBlock,
+		utmBlock,
+		tomatoLine,
 		loadingMsg,
+	)
+	return "\n\n" + content + "\n\n"
+}
+
+func (m modelTUI) fadeView() string {
+	logoText := `
+	_____                          _             _   _ ___ 
+	|_   _|__  _ __ ___   __ _ _ __| |_ ___      | | | |_ _|
+	| |/ _ \| '_ ' _ \ / _' | '__| __/ _ \_____| | | || | 
+	| | (_) | | | | | | (_| | |  | || (_) |_____| |_| || | 
+	|_|\___/|_| |_| |_|\__,_|_|   \__\___/      \___/|___|`
+
+	utmText := `
+	_   _ _ __ ___   ___ ___  _ __ __   __
+	| | | | '_ ' _ \ / __/ _ \| '_ \\ \ / /
+	| |_| | | | | | | (_| (_) | | | |\ V / 
+	\___/|_| |_| |_|\___\___/|_| |_| \_/  
+	`
+
+	fade := 1.0 - float64(m.fadeStep)/10.0
+	if fade < 0 {
+		fade = 0
+	}
+
+	color := lipgloss.Color(fmt.Sprintf("%d", 232+int(fade*20)))
+
+	style := lipgloss.NewStyle().
+		Foreground(color).
+		Align(lipgloss.Center)
+
+	content := lipgloss.JoinVertical(
+		lipgloss.Center,
+		style.Render(logoText),
+		style.Render(utmText),
+		style.Render(strings.Repeat("🍅 ", 60/4)),
+		style.Render(fmt.Sprintf("%s Initializing...", m.spinner.View())),
 	)
 
 	return "\n\n" + content + "\n\n"
+}
+
+func (m modelTUI) headerView() string {
+	header := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("196")).
+		Bold(true).
+		Render("Tomato-UI")
+
+	sub := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render("utmconv")
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		sub,
+	) + "\n\n🍅 Ready!\n\n"
 }
 
 func writeLines(filename string, lines []string) error {
@@ -138,9 +260,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// スプラッシュ終了後の処理
-	fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render("✓ Ready! Welcome to tomato-ui."))
-
 	var confirm bool = false
 	if app.Filename != "" && app.Vendor != "" {
 		confirm = true
@@ -152,17 +271,8 @@ func main() {
 		}
 		form := huh.NewForm(
 			huh.NewGroup(
-				huh.NewFilePicker().
-					Title("ファイル名").
-					Description("Panorama の xml ファイルを選択してください").
-					CurrentDirectory(".").
-					DirAllowed(true).
-					// AllowedTypes([]string{".xml"}).
-					Value(&app.Filename),
-			),
-			huh.NewGroup(
 				huh.NewSelect[string]().
-					Title("解析する UTM のベンダー").
+					Title("解析する UTM のベンダーを選択してください").
 					Options(
 						huh.NewOption("Panorama", "panorama"),
 						huh.NewOption("PaloAlto", "pa"),
@@ -172,8 +282,17 @@ func main() {
 					Value(&app.Vendor),
 			),
 			huh.NewGroup(
+				huh.NewFilePicker().
+					Title("設定ファイルを選択してください").
+					Description("⏎ を押した後に、ファイルを選択してください").
+					CurrentDirectory(".").
+					DirAllowed(true).
+					// AllowedTypes([]string{".xml"}).
+					Value(&app.Filename),
+			),
+			huh.NewGroup(
 				huh.NewSelect[string]().
-					Title("変換形式").
+					Title("変換形式を選択してください").
 					Options(
 						huh.NewOption("変換しない", ""),
 						huh.NewOption("Check Point CLI", "cp"),
@@ -207,7 +326,7 @@ func main() {
 	switch app.Vendor {
 	case "panorama":
 		paloalto.ParsePanorama(&app)
-		slog.Info("Panorama の解析が終了しました", "output", "Panorama.xlsx")
+		slog.Info("Panorama の解析が終了しました", "output", "panorama.xlsx")
 		switch app.To {
 		case "":
 			slog.Info("変換しないが選択されました。処理を終了します")
