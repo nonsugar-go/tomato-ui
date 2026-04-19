@@ -52,6 +52,13 @@ func main() {
 			os.Exit(1)
 		}
 		slog.Info("fetched hosts", "count", len(data.([]checkpoint.Host)))
+	case "tcp-services":
+		data, err = cpdump.FetchServiceTCP(client, cfg.Limit)
+		if err != nil {
+			slog.Error("failed to fetch tcp services", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("fetched tcp services", "count", len(data.([]checkpoint.ServiceTCP)))
 	default:
 		printUsage()
 		os.Exit(1)
@@ -113,8 +120,10 @@ func parseArgs() Config {
 
 func printUsage() {
 	fmt.Println("usage:")
-	fmt.Println("  cp-dump hosts  [options]")
-	fmt.Println("  cp-dump groups [options]")
+	fmt.Println("  cp-dump hosts        [options]")
+	fmt.Println("  cp-dump groups       [options]")
+	fmt.Println("  cp-dump tcp-services [options]")
+	fmt.Println("  cp-dump udp-services [options]")
 	fmt.Println()
 	fmt.Println("commands:")
 	fmt.Println("  host   show-hosts from Check Point")
