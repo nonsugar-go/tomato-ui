@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -12,6 +13,7 @@ import (
 )
 
 type Config struct {
+	Command  string
 	Server   string
 	User     string
 	Password string
@@ -38,9 +40,20 @@ func main() {
 	}
 
 	slog.Info("login ok", "SID", client.SID)
-	data, err := cpdump.FetchHosts(client, cfg.Limit)
-	if err != nil {
-		slog.Error("failed to fetch hosts", "error", err)
+
+	var data any
+	var err error
+
+	switch cfg.Command {
+	case "hosts":
+		data, err = cpdump.FetchHosts(client, cfg.Limit)
+		if err != nil {
+			slog.Error("failed to fetch hosts", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("fetched hosts", "count", len(data.([]checkpoint.Host)))
+	default:
+		printUsage()
 		os.Exit(1)
 	}
 
@@ -67,21 +80,53 @@ func main() {
 func parseArgs() Config {
 	var cfg Config
 
-	flag.StringVar(&cfg.Server, "server", "", "management server")
-	flag.StringVar(&cfg.User, "user", "admin", "username")
-	flag.StringVar(&cfg.Password, "password", "", "password")
-	flag.IntVar(&cfg.Limit, "limit", 500, "fetch limit")
-	flag.StringVar(&cfg.Output, "o", "", "output file (default stdout)")
+	if len(os.Args) < 2 {
+		printUsage()
+		os.Exit(1)
+	}
 
-	flag.Parse()
+	cfg.Command = os.Args[1]
 
-	if cfg.Server == "" {
-		slog.Error("server is required")
+	fs := flag.NewFlagSet("cp-dump "+cfg.Command, flag.ContinueOnError)
+	fs.SetOutput(os.Stdout)
 
-		slog.Info(`example: cp-dump -server 192.168.1.41 -user secadmin -password Lab@12345 -o hosts.json`)
-		slog.Info(`example: jq -r '.[] | [.name, .["ipv4-address"], .["ipv6-address"], .comments, (.tags // [] | join(";")) ] | @csv' hosts.json`)
+	fs.StringVar(&cfg.Server, "server", "", "management server")
+	fs.StringVar(&cfg.User, "user", "admin", "username")
+	fs.StringVar(&cfg.Password, "password", "", "password")
+	fs.IntVar(&cfg.Limit, "limit", 0, "number of objects to fetch (0-500, 0 = unlimited)")
+	fs.StringVar(&cfg.Output, "o", "", "output file (default stdout)")
+
+	fs.Usage = func() {
+		printUsage()
+		fmt.Println()
+		fmt.Println("options:")
+		fs.PrintDefaults()
+	}
+
+	err := fs.Parse(os.Args[2:])
+	if err != nil {
 		os.Exit(1)
 	}
 
 	return cfg
+}
+
+func printUsage() {
+	fmt.Println("usage:")
+	fmt.Println("  cp-dump hosts  [options]")
+	fmt.Println("  cp-dump groups [options]")
+	fmt.Println()
+	fmt.Println("commands:")
+	fmt.Println("  host   show-hosts from Check Point")
+	fmt.Println("  group  show-groups from Check Point")
+	fmt.Println()
+	fmt.Println("example:")
+	fmt.Println("  cp-dump host -server 192.168.1.100 -user admin -password xxx -o hosts.json")
+	fmt.Println("  cp-dump group -server 192.168.1.100 -user admin -password xxx -o groups.json")
+	fmt.Println()
+	fmt.Println("run:")
+	fmt.Println("  cp-dump hosts -h")
+	fmt.Println()
+	fmt.Println("jq example:")
+	fmt.Println(`jq -r '.[]|[.name,.["ipv4-address"],.["ipv6-address"],.comments,(.tags//[]|join(";")),.color]|@csv' hosts.json`)
 }
