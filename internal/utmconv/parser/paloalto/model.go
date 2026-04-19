@@ -5,6 +5,7 @@ type PaloAltoConfig struct {
 	Addresses     []ScopedAddress
 	AddressGroups []ScopedAddressGroup
 	Services      []ScopedService
+	ServiceGroups []ScopedServiceGroup
 	SecurityRules []ScopedSecurity
 	NATRules      []ScopedNAT
 }
@@ -27,6 +28,11 @@ type ScopedAddressGroup struct {
 type ScopedService struct {
 	Scope   string // shared / dg
 	Service Service
+}
+
+type ScopedServiceGroup struct {
+	Scope string // shared / dg
+	Group ServiceGroup
 }
 
 type ScopedSecurity struct {

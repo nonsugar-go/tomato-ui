@@ -48,8 +48,7 @@ func (m modelTUI) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg {
-			// time.Sleep(2 * time.Second)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1 * time.Second)
 			return tickMsg{}
 		},
 	)
@@ -118,21 +117,21 @@ func (m modelTUI) View() string {
 	return ""
 }
 
-func (m modelTUI) splashView() string {
-	logoText := `
+var logoText string = `
 	_____                          _             _   _ ___ 
 	|_   _|__  _ __ ___   __ _ _ __| |_ ___      | | | |_ _|
 	| |/ _ \| '_ ' _ \ / _' | '__| __/ _ \_____| | | || | 
 	| | (_) | | | | | | (_| | |  | || (_) |_____| |_| || | 
 	|_|\___/|_| |_| |_|\__,_|_|   \__\___/      \___/|___|`
 
-	utmText := `
+var utmText string = `
 	_   _ _ __ ___   ___ ___  _ __ __   __
 	| | | | '_ ' _ \ / __/ _ \| '_ \\ \ / /
 	| |_| | | | | | | (_| (_) | | | |\ V / 
 	\___/|_| |_| |_|\___\___/|_| |_| \_/  
 	`
 
+func (m modelTUI) splashView() string {
 	colors := []string{"196", "202", "208", "214", "220"}
 
 	logoLines := strings.Split(strings.Trim("\n"+logoText, "\n"), "\n")
@@ -176,20 +175,6 @@ func (m modelTUI) splashView() string {
 }
 
 func (m modelTUI) fadeView() string {
-	logoText := `
-	_____                          _             _   _ ___ 
-	|_   _|__  _ __ ___   __ _ _ __| |_ ___      | | | |_ _|
-	| |/ _ \| '_ ' _ \ / _' | '__| __/ _ \_____| | | || | 
-	| | (_) | | | | | | (_| | |  | || (_) |_____| |_| || | 
-	|_|\___/|_| |_| |_|\__,_|_|   \__\___/      \___/|___|`
-
-	utmText := `
-	_   _ _ __ ___   ___ ___  _ __ __   __
-	| | | | '_ ' _ \ / __/ _ \| '_ \\ \ / /
-	| |_| | | | | | | (_| (_) | | | |\ V / 
-	\___/|_| |_| |_|\___\___/|_| |_| \_/  
-	`
-
 	fade := 1.0 - float64(m.fadeStep)/10.0
 	if fade < 0 {
 		fade = 0
@@ -229,16 +214,24 @@ func (m modelTUI) headerView() string {
 	) + "\n\n🍅 Ready!\n\n"
 }
 
-func writeLines(filename string, lines []string) error {
+func writeMgmtLines(filename string, lines []string, app model.App) error {
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
+	fmt.Fprintln(f, `mgmt login user secadmin password Lab@12345`)
 	for _, line := range lines {
-		fmt.Fprintln(f, line)
+		fmt.Fprint(f, "mgmt "+line)
+		if app.IgnoreWarnings {
+			fmt.Fprint(f, ` ignore-warnings true`)
+		}
+		fmt.Fprintln(f)
 	}
+	fmt.Fprintln(f, `mgmt discard`)
+	fmt.Fprintln(f, `# mgmt publish`)
+	fmt.Fprintln(f, `mgmt logout`)
 	return nil
 }
 
@@ -252,6 +245,7 @@ func main() {
 	flag.StringVar(&app.Filename, "in", "", "comfig file")
 	flag.StringVar(&app.Vendor, "vendor", "panorama", "vendor type")
 	flag.StringVar(&app.To, "to", "cp", "output format")
+	flag.BoolVar(&app.IgnoreWarnings, "ignore-warnings", false, "ignore warnings during conversion")
 	flag.Parse()
 
 	p := tea.NewProgram(initialModel())
@@ -261,8 +255,10 @@ func main() {
 	}
 
 	var confirm bool = false
+	var interactive bool = true
 	if app.Filename != "" && app.Vendor != "" {
 		confirm = true
+		interactive = false
 	}
 
 	for {
@@ -273,11 +269,12 @@ func main() {
 			huh.NewGroup(
 				huh.NewSelect[string]().
 					Title("解析する UTM のベンダーを選択してください").
+					Description("⏎ を押した後に、ベンダーを選択してください\n\n\n\n\n\n\n").
 					Options(
 						huh.NewOption("Panorama", "panorama"),
-						huh.NewOption("PaloAlto", "pa"),
-						huh.NewOption("FortiGate", "fg"),
-						huh.NewOption("Checkpoint", "cp"),
+						// huh.NewOption("PaloAlto", "pa"),
+						// huh.NewOption("FortiGate", "fg"),
+						// huh.NewOption("Checkpoint", "cp"),
 					).
 					Value(&app.Vendor),
 			),
@@ -296,18 +293,26 @@ func main() {
 					Options(
 						huh.NewOption("変換しない", ""),
 						huh.NewOption("Check Point CLI", "cp"),
-						huh.NewOption("JSON", "json"),
+						// huh.NewOption("JSON", "json"),
 					).
 					Value(&app.To),
+			),
+			huh.NewGroup(
+				huh.NewConfirm().
+					Title("変換時の警告を無視しますか？").
+					Affirmative("はい").
+					Negative("いいえ").
+					Value(&app.IgnoreWarnings),
 			),
 		)
 		if err := form.Run(); err != nil {
 			log.Fatal(err)
 		}
 
+		slog.Info("対象ベンダ", "vendor", app.Vendor)
 		slog.Info("設定ファイル", "config_file", app.Filename)
-		slog.Info("対象", "utm", app.Vendor)
 		slog.Info("変換形式", "to", app.To)
+		slog.Info("変換時の警告を無視", "ignore_warnings", app.IgnoreWarnings)
 
 		form = huh.NewForm(
 			huh.NewGroup(
@@ -337,7 +342,7 @@ func main() {
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
-			writeLines("checkpoint_address.conf", lines)
+			writeMgmtLines("checkpoint_address.conf", lines, app)
 			slog.Info("Check Point のアドレス変換が終了しました",
 				"output", "checkpoint_address.conf")
 
@@ -345,9 +350,33 @@ func main() {
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
-			writeLines("checkpoint_address_group.conf", lines)
+			writeMgmtLines("checkpoint_address_group.conf", lines, app)
 			slog.Info("Check Point のアドレスグループ変換が終了しました",
 				"output", "checkpoint_address_group.conf")
+
+			lines, err = checkpoint.ConvertServices(app.Services)
+			if err != nil {
+				slog.Error("convert error:", "err", err)
+			}
+			writeMgmtLines("checkpoint_service.conf", lines, app)
+			slog.Info("Check Point のサービス変換が終了しました",
+				"output", "checkpoint_service.conf")
+
+			lines, err = checkpoint.ConvertServiceGroups(app.ServiceGroups)
+			if err != nil {
+				slog.Error("convert error:", "err", err)
+			}
+			writeMgmtLines("checkpoint_service_group.conf", lines, app)
+			slog.Info("Check Point のサービスグループ変換が終了しました",
+				"output", "checkpoint_service_group.conf")
+
+			lines, err = checkpoint.ConvertPolicies(app.Policies)
+			if err != nil {
+				slog.Error("convert error:", "err", err)
+			}
+			writeMgmtLines("checkpoint_policy.conf", lines, app) // NOTE: untested
+			slog.Info("Check Point のポリシー変換が終了しました",
+				"output", "checkpoint_policy.conf")
 
 		default:
 			slog.Error("unsupported output", "to", app.To)
@@ -355,4 +384,19 @@ func main() {
 	default:
 		slog.Error("Vendor の指定は未実装です", "vendor", app.Vendor)
 	}
+
+	if interactive {
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewConfirm().
+					Title("処理が完了しました。⏎ キーを押して終了してください").
+					Value(&confirm),
+			),
+		)
+		if err := form.Run(); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	slog.Info("終了します")
 }

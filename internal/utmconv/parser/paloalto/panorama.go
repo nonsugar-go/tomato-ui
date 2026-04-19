@@ -79,6 +79,58 @@ func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 		}
 	}
 
+	for _, svcGrp := range c.Shared.ServiceGroups {
+		result.ServiceGroups = append(result.ServiceGroups, ScopedServiceGroup{
+			Scope: "shared",
+			Group: svcGrp,
+		})
+	}
+
+	for _, dg := range c.Devices.DeviceGroups {
+		for _, svcGrp := range dg.ServiceGroups {
+			result.ServiceGroups = append(result.ServiceGroups, ScopedServiceGroup{
+				Scope: dg.Name,
+				Group: svcGrp,
+			})
+		}
+	}
+
+	for _, rule := range c.Shared.PreRulebase.Security.Rules {
+		result.SecurityRules = append(result.SecurityRules, ScopedSecurity{
+			Scope:        "shared",
+			Rulebase:     "pre",
+			SecurityRule: rule,
+		})
+	}
+
+	for _, rule := range c.Shared.PostRulebase.Security.Rules {
+		result.SecurityRules = append(result.SecurityRules, ScopedSecurity{
+			Scope:        "shared",
+			Rulebase:     "post",
+			SecurityRule: rule,
+		})
+	}
+
+	for _, dg := range c.Devices.DeviceGroups {
+		for _, rule := range dg.PreRulebase.Security.Rules {
+			result.SecurityRules = append(result.SecurityRules, ScopedSecurity{
+				Scope:        dg.Name,
+				Rulebase:     "pre",
+				SecurityRule: rule,
+			})
+		}
+	}
+
+	for _, dg := range c.Devices.DeviceGroups {
+		for _, rule := range dg.PostRulebase.Security.Rules {
+			result.SecurityRules = append(result.SecurityRules, ScopedSecurity{
+				Scope:        dg.Name,
+				Rulebase:     "post",
+				SecurityRule: rule,
+			})
+		}
+	}
+
 	return &result
 }
 

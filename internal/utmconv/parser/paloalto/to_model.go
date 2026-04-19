@@ -1,6 +1,9 @@
 package paloalto
 
 import (
+	"cmp"
+	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
@@ -12,20 +15,32 @@ func fillModel(app *model.App, palo *PaloAltoConfig) error {
 	if app.Tag, err = ToModelTags(palo.TagObject); err != nil {
 		return err
 	}
+	slog.Info("タグが変換されました", "count", len(app.Tag))
 
 	if app.Addresses, err = ToModelAddresses(palo.Addresses); err != nil {
 		return err
 	}
+	slog.Info("アドレスが変換されました", "count", len(app.Addresses))
 
 	if app.AddressGroups, err = ToModelAddressGroups(palo.AddressGroups); err != nil {
 		return err
 	}
+	slog.Info("アドレスグループが変換されました", "count", len(app.AddressGroups))
 
-	// app.Services, err = ...
+	if app.Services, err = ToModelServices(palo.Services); err != nil {
+		return err
+	}
+	slog.Info("サービスが変換されました", "count", len(app.Services))
+
+	if app.ServiceGroups, err = ToModelServiceGroups(palo.ServiceGroups); err != nil {
+		return err
+	}
+	slog.Info("サービスグループが変換されました", "count", len(app.ServiceGroups))
 
 	if app.Policies, err = ToModelPolicies(palo.SecurityRules); err != nil {
 		return err
 	}
+	slog.Info("ポリシーが変換されました", "count", len(app.Policies))
 
 	// app.NATRules, err = ...
 
@@ -111,6 +126,61 @@ func ToModelAddressGroups(scopedAddrGrps []ScopedAddressGroup) ([]model.AddressG
 	return result, nil
 }
 
+func ToModelServices(scopedSvcs []ScopedService) ([]model.Service, error) {
+	var result []model.Service
+
+	for _, ss := range scopedSvcs {
+		s := ss.Service
+
+		svc := model.Service{
+			Name:        s.Name,
+			Description: s.Description,
+			Tags:        s.Tags,
+		}
+
+		switch {
+		case s.Protocol.TCP != nil:
+			svc.Type = model.ServiceTypeTCP
+			svc.Ports = s.Protocol.TCP.Port
+			svc.SourcePorts = s.Protocol.TCP.SourcePort
+
+		case s.Protocol.UDP != nil:
+			svc.Type = model.ServiceTypeUDP
+			svc.Ports = s.Protocol.UDP.Port
+			svc.SourcePorts = s.Protocol.UDP.SourcePort
+
+		default:
+			svc.Type = model.ServiceTypeUnknown
+			svc.Ports = ""
+			svc.SourcePorts = ""
+
+		}
+
+		result = append(result, svc)
+	}
+
+	return result, nil
+}
+
+func ToModelServiceGroups(scopedSvcGrps []ScopedServiceGroup) ([]model.ServiceGroup, error) {
+	var result []model.ServiceGroup
+
+	for _, sg := range scopedSvcGrps {
+		g := sg.Group
+
+		grp := model.ServiceGroup{
+			Name:        g.Name,
+			Members:     g.Members,
+			Description: g.Description,
+			Tags:        g.Tags,
+		}
+
+		result = append(result, grp)
+	}
+
+	return result, nil
+}
+
 func ToModelPolicies(scopedSecurities []ScopedSecurity) ([]model.Policy, error) {
 	var result []model.Policy
 
@@ -130,7 +200,7 @@ func ToModelPolicies(scopedSecurities []ScopedSecurity) ([]model.Policy, error) 
 				Destinations: toAddrRefs(rule.Destinations),
 
 				Applications: rule.Applications,
-				Services:     toSvcRefs(rule.Services),
+				Services:     toSvcRefs(rule.Services, rule.Applications),
 
 				Users: rule.SourceUsers,
 				HIPs:  append(rule.SourceHIP, rule.DestinationHIP...),
@@ -198,7 +268,7 @@ func normalizeName(s string) string {
 	return s
 }
 
-func toSvcRefs(names []string) []model.ServiceRef {
+func toSvcRefs(names []string, apps []string) []model.ServiceRef {
 	if len(names) == 0 {
 		return nil
 	}
@@ -208,13 +278,46 @@ func toSvcRefs(names []string) []model.ServiceRef {
 
 	for _, n := range names {
 		n = normalizeServiceName(n)
-		if n == "" {
-			continue
-		}
 
-		// application-default は特別扱いするか検討
-		if n == "application-default" {
-			refs = append(refs, model.ServiceRef{Name: n})
+		// application-default or any
+		if n == "application-default" || n == "" {
+			if len(apps) == 0 {
+				continue
+			}
+			for _, a := range apps {
+				normalizeApp := normalizeName(a)
+				appToService := []string{}
+
+				switch normalizeApp {
+				case "":
+					// "any"
+					continue
+				case "icmp":
+					appToService = append(appToService, "icmp-proto")
+				case "ping":
+					appToService = append(appToService, "echo-request")
+				case "traceroute":
+					appToService = append(appToService, "traceroute")
+				case "ssh":
+					appToService = append(appToService, "ssh")
+				case "syslog":
+					appToService = append(appToService, "syslog")
+				case "ipsec-esp", "ipsec-esp-udp":
+					appToService = append(appToService, "ESP")
+					appToService = append(appToService, "IKE")
+					appToService = append(appToService, "IKE_NAT_TRAVERSAL")
+				default:
+					slog.Warn("cannot handle application-default for app", "app", a)
+				}
+				for _, s := range appToService {
+					if _, ok := seen[s]; ok {
+						continue
+					}
+					seen[s] = struct{}{}
+
+					refs = append(refs, model.ServiceRef{Name: s})
+				}
+			}
 			continue
 		}
 
@@ -225,6 +328,10 @@ func toSvcRefs(names []string) []model.ServiceRef {
 
 		refs = append(refs, model.ServiceRef{Name: n})
 	}
+
+	slices.SortFunc(refs, func(a, b model.ServiceRef) int {
+		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
 
 	return refs
 }
@@ -265,6 +372,9 @@ func normalizeAction(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
 
+// extractProfiles extracts profile names from ProfileSetting.
+// It handles both group-based and individual profile settings.
+// NOTE: untested
 func extractProfiles(ps *ProfileSetting) []string {
 	if ps == nil {
 		return nil

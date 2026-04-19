@@ -27,11 +27,11 @@ type PolicyMatch struct {
 	FromZones []string
 	ToZones   []string
 
-	Sources      []AddressRef
-	Destinations []AddressRef
+	Sources      AddressRefs
+	Destinations AddressRefs
 
 	Applications []string
-	Services     []ServiceRef
+	Services     ServiceRefs
 
 	Users         []string
 	HIPs          []string
@@ -68,6 +68,26 @@ type AddressRef struct {
 	// 将来的に type / subnet / fqdn なども持てる
 }
 
+type AddressRefs []AddressRef
+
+func (refs AddressRefs) Names() []string {
+	names := make([]string, len(refs))
+	for i, r := range refs {
+		names[i] = r.Name
+	}
+	return names
+}
+
 type ServiceRef struct {
 	Name string
+}
+
+type ServiceRefs []ServiceRef
+
+func (refs ServiceRefs) Names() []string {
+	names := make([]string, len(refs))
+	for i, r := range refs {
+		names[i] = r.Name
+	}
+	return names
 }

@@ -41,7 +41,7 @@ func ConvertAddress(addr model.Address) (string, error) {
 
 	switch addr.Type {
 
-	case "ip-netmask":
+	case model.AddressTypeIPNetmask:
 		if ip.IsIPv4(addr.Value) {
 			if ip.IsIPv4Host(addr.Value) {
 				ipaddr := addr.Value
@@ -92,7 +92,7 @@ func ConvertAddress(addr model.Address) (string, error) {
 			return "", fmt.Errorf("invalid IP address: %s", addr.Value)
 		}
 
-	case "fqdn":
+	case model.AddressTypeFQDN:
 		return fmt.Sprintf(
 			"add dns-domain name \".%s\" is-sub-domain false%s%s",
 			addr.Value, comment, tags,
@@ -104,6 +104,21 @@ func ConvertAddress(addr model.Address) (string, error) {
 }
 
 func ConvertAddressGroups(groups []model.AddressGroup) ([]string, error) {
+	cmds1, err := BuildEmptyGroups(groups)
+	if err != nil {
+		return nil, err
+	}
+
+	cmds2, err := BuildGroupMembers(groups)
+	if err != nil {
+		return nil, err
+	}
+
+	cmds1 = append(cmds1, cmds2...)
+	return cmds1, nil
+}
+
+func BuildEmptyGroups(groups []model.AddressGroup) ([]string, error) {
 	var results []string
 	var errs []error
 
@@ -112,35 +127,55 @@ func ConvertAddressGroups(groups []model.AddressGroup) ([]string, error) {
 	})
 
 	for _, g := range groups {
-		line, err := ConvertAddressGroup(g)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", g.Name, err))
+		if g.Name == "" {
+			errs = append(errs, fmt.Errorf("group name is empty"))
 			continue
 		}
-		results = append(results, line)
+
+		comment := buildComment(g.Description)
+		tags := buildTags(g.Tags)
+
+		var sb strings.Builder
+		sb.WriteString(`add group name "`)
+		sb.WriteString(g.Name)
+		sb.WriteString(`"`)
+		sb.WriteString(comment)
+		sb.WriteString(tags)
+
+		results = append(results, sb.String())
 	}
 
 	return results, errors.Join(errs...)
 }
 
-func ConvertAddressGroup(g model.AddressGroup) (string, error) {
-	if len(g.Members) == 0 {
-		return "", fmt.Errorf("group has no members")
-	}
+func BuildGroupMembers(groups []model.AddressGroup) ([]string, error) {
+	const chunkSize = 20
 
-	comment := buildComment(g.Description)
+	var results []string
+	var errs []error
 
-	cmd := fmt.Sprintf("add group name \"%s\"", g.Name)
+	for _, g := range groups {
+		if len(g.Members) == 0 {
+			continue
+		}
 
-	if len(g.Members) == 1 {
-		cmd += fmt.Sprintf(" members \"%s\"", g.Members[0])
-	} else {
-		for i, m := range g.Members {
-			cmd += fmt.Sprintf(" members.%d \"%s\"", i+1, m)
+		for i := 0; i < len(g.Members); i += chunkSize {
+			end := i + chunkSize
+			if end > len(g.Members) {
+				end = len(g.Members)
+			}
+
+			chunk := g.Members[i:end]
+
+			var sb strings.Builder
+			sb.WriteString(`set group name "`)
+			sb.WriteString(g.Name)
+			sb.WriteString(`"`)
+			sb.WriteString(buildIndexedKV("members.add", chunk))
+
+			results = append(results, sb.String())
 		}
 	}
 
-	cmd += comment
-
-	return cmd, nil
+	return results, errors.Join(errs...)
 }
