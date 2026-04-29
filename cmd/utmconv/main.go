@@ -221,17 +221,18 @@ func writeMgmtLines(filename string, lines []string, app model.App) error {
 	}
 	defer f.Close()
 
-	fmt.Fprintln(f, `mgmt login user secadmin password Lab@12345`)
+	fmt.Fprintln(f, `mgmt_cli login -u secadmin -p Lab@12345 >sid.txt`)
 	for _, line := range lines {
-		fmt.Fprint(f, "mgmt "+line)
+		fmt.Fprint(f, "mgmt_cli "+line)
 		if app.IgnoreWarnings {
 			fmt.Fprint(f, ` ignore-warnings true`)
 		}
-		fmt.Fprintln(f)
+		fmt.Fprintln(f, ` -s sid.txt`)
 	}
-	fmt.Fprintln(f, `mgmt discard`)
-	fmt.Fprintln(f, `# mgmt publish`)
-	fmt.Fprintln(f, `mgmt logout`)
+	fmt.Fprintln(f, `mgmt_cli discard -s sid.txt
+# mgmt_cli publish -s sid.txt
+mgmt_cli logout -s sid.txt
+rm sid.txt`)
 	return nil
 }
 
@@ -338,7 +339,8 @@ func main() {
 		case "json":
 			slog.Warn("JSON output is not implemented yet")
 		case "cp":
-			lines, err := checkpoint.ConvertAddresses(app.Addresses)
+			ctx := checkpoint.NewContext()
+			lines, err := checkpoint.ConvertAddresses(app.Addresses, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
@@ -346,7 +348,7 @@ func main() {
 			slog.Info("Check Point のアドレス変換が終了しました",
 				"output", "checkpoint_address.conf")
 
-			lines, err = checkpoint.ConvertAddressGroups(app.AddressGroups)
+			lines, err = checkpoint.ConvertAddressGroups(app.AddressGroups, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}

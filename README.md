@@ -52,7 +52,7 @@ utmconv -in panorama.xml -to cp -ignore-warnings
 #### 使用例
 
 ```zsh
-push-cli.py -host 192.168.1.41 -user admin -pass Lab@12345 -f checkpoint_service.conf
+push-cli -host 192.168.1.40 -user admin -pass Lab@12345 -enable_cmd expert -enable_pass Lab@12345 -f checkpoint_address.conf 2>&1|tee 1.log
 ```
 
 ### cp-dump

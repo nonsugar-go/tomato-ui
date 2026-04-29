@@ -11,7 +11,7 @@ import (
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
 )
 
-func ConvertAddresses(addrs []model.Address) ([]string, error) {
+func ConvertAddresses(addrs []model.Address, ctx *Context) ([]string, error) {
 	var results []string
 	var errs []error
 
@@ -24,7 +24,7 @@ func ConvertAddresses(addrs []model.Address) ([]string, error) {
 	})
 
 	for _, addr := range addrs {
-		line, err := ConvertAddress(addr)
+		line, err := ConvertAddress(addr, ctx)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", addr.Name, err))
 			continue
@@ -35,7 +35,7 @@ func ConvertAddresses(addrs []model.Address) ([]string, error) {
 	return results, errors.Join(errs...)
 }
 
-func ConvertAddress(addr model.Address) (string, error) {
+func ConvertAddress(addr model.Address, ctx *Context) (string, error) {
 	comment := buildComment(addr.Description)
 	tags := buildTags(addr.Tags)
 
@@ -50,6 +50,7 @@ func ConvertAddress(addr model.Address) (string, error) {
 					ipaddr = ip.String()
 				}
 				// host
+				ctx.AddrMap[addr.Name] = addr.Name
 				return fmt.Sprintf(
 					"add host name \"%s\" ipv4-address %s%s%s",
 					addr.Name, ipaddr, comment, tags,
@@ -58,6 +59,7 @@ func ConvertAddress(addr model.Address) (string, error) {
 			ip, ipnet, err := net.ParseCIDR(addr.Value)
 			if err == nil {
 				length, _ := ipnet.Mask.Size()
+				ctx.AddrMap[addr.Name] = addr.Name
 				return fmt.Sprintf(
 					"add network name \"%s\" subnet4 %s mask-length4 %d%s%s",
 					addr.Name, ip.String(), length, comment, tags,
@@ -81,6 +83,7 @@ func ConvertAddress(addr model.Address) (string, error) {
 			ip, ipnet, err := net.ParseCIDR(addr.Value)
 			if err == nil {
 				length, _ := ipnet.Mask.Size()
+				ctx.AddrMap[addr.Name] = addr.Name
 				return fmt.Sprintf(
 					"add network name \"%s\" subnet6 %s mask-length6 %d%s%s",
 					addr.Name, ip.String(), length, comment, tags,
@@ -93,6 +96,14 @@ func ConvertAddress(addr model.Address) (string, error) {
 		}
 
 	case model.AddressTypeFQDN:
+		var comment string
+		if addr.Description != "" {
+			comment = buildComment(addr.Description)
+		} else {
+			comment = buildComment(addr.Name)
+		}
+
+		ctx.AddrMap[addr.Name] = "." + addr.Value
 		return fmt.Sprintf(
 			"add dns-domain name \".%s\" is-sub-domain false%s%s",
 			addr.Value, comment, tags,
@@ -103,13 +114,13 @@ func ConvertAddress(addr model.Address) (string, error) {
 	}
 }
 
-func ConvertAddressGroups(groups []model.AddressGroup) ([]string, error) {
-	cmds1, err := BuildEmptyGroups(groups)
+func ConvertAddressGroups(groups []model.AddressGroup, ctx *Context) ([]string, error) {
+	cmds1, err := BuildEmptyGroups(groups, ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	cmds2, err := BuildGroupMembers(groups)
+	cmds2, err := BuildGroupMembers(groups, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +129,7 @@ func ConvertAddressGroups(groups []model.AddressGroup) ([]string, error) {
 	return cmds1, nil
 }
 
-func BuildEmptyGroups(groups []model.AddressGroup) ([]string, error) {
+func BuildEmptyGroups(groups []model.AddressGroup, ctx *Context) ([]string, error) {
 	var results []string
 	var errs []error
 
@@ -143,12 +154,13 @@ func BuildEmptyGroups(groups []model.AddressGroup) ([]string, error) {
 		sb.WriteString(tags)
 
 		results = append(results, sb.String())
+		ctx.AddrMap[g.Name] = g.Name
 	}
 
 	return results, errors.Join(errs...)
 }
 
-func BuildGroupMembers(groups []model.AddressGroup) ([]string, error) {
+func BuildGroupMembers(groups []model.AddressGroup, ctx *Context) ([]string, error) {
 	const chunkSize = 20
 
 	var results []string
@@ -166,12 +178,19 @@ func BuildGroupMembers(groups []model.AddressGroup) ([]string, error) {
 			}
 
 			chunk := g.Members[i:end]
+			mapped := make([]string, 0, len(chunk))
+			for _, m := range chunk {
+				if v, ok := ctx.AddrMap[m]; ok {
+					m = v
+				}
+				mapped = append(mapped, m)
+			}
 
 			var sb strings.Builder
 			sb.WriteString(`set group name "`)
 			sb.WriteString(g.Name)
 			sb.WriteString(`"`)
-			sb.WriteString(buildIndexedKV("members.add", chunk))
+			sb.WriteString(buildIndexedKV("members.add", mapped))
 
 			results = append(results, sb.String())
 		}

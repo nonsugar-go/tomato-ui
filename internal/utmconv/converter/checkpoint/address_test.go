@@ -75,6 +75,18 @@ func TestConvertAddress(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "Domain name with empty description",
+			address: model.Address{
+				Type:        model.AddressTypeFQDN,
+				Name:        "Domain2",
+				Value:       "example.org",
+				Description: "",
+				Tags:        []string{"tag1", "tag2"},
+			},
+			want:    `add dns-domain name ".example.org" is-sub-domain false comments "Domain2" tags.1 "tag1" tags.2 "tag2"`,
+			wantErr: false,
+		},
+		{
 			name: "Invalid type",
 			address: model.Address{
 				Type:        model.AddressTypeUnknown,
@@ -90,7 +102,8 @@ func TestConvertAddress(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ConvertAddress(tt.address)
+			ctx := NewContext()
+			got, err := ConvertAddress(tt.address, ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("convertAddress() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -144,7 +157,8 @@ func TestConvertAddressGroups(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ConvertAddressGroups(tt.groups)
+			ctx := NewContext()
+			got, err := ConvertAddressGroups(tt.groups, ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ConvertAddressGroups() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -204,7 +218,8 @@ func TestBuildEmptyGroups(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := BuildEmptyGroups(tt.groups)
+			ctx := NewContext()
+			got, err := BuildEmptyGroups(tt.groups, ctx)
 			if err != nil {
 				t.Errorf("BuildEmptyGroups() error = %v", err)
 				return
@@ -277,7 +292,8 @@ func TestBuildGroupMembers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := BuildGroupMembers(tt.groups)
+			ctx := NewContext()
+			got, err := BuildGroupMembers(tt.groups, ctx)
 			if err != nil {
 				t.Errorf("BuildGroupMembers() error = %v", err)
 				return
