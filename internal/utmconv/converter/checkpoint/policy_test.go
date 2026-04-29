@@ -91,11 +91,40 @@ func TestConvertPolicy(t *testing.T) {
 			},
 			want: `add access-rule layer "Network" position bottom name "Policy with Services" service.1 "Service1" service.2 "Service2" action "Accept"`,
 		},
+		{
+			name: "Policy with source-negate flag",
+			policy: model.Policy{
+				Name:    "Policy with Source-Negate Flag",
+				Enabled: true,
+				Match: model.PolicyMatch{
+					Sources:      model.AddressRefs{{Name: "Source1"}, {Name: "Source2"}},
+					Destinations: model.AddressRefs{{Name: "Destination1"}},
+					NegateSource: true,
+				},
+				Action: model.PolicyAction{Type: model.ActionDeny},
+			},
+			want: `add access-rule layer "Network" position bottom name "Policy with Source-Negate Flag" source-negate true source.1 "Source1" source.2 "Source2" destination.1 "Destination1" action "Reject"`,
+		},
+		{
+			name: "Policy with destination-negate flag",
+			policy: model.Policy{
+				Name:    "Policy with Destination-Negate Flag",
+				Enabled: true,
+				Match: model.PolicyMatch{
+					Sources:           model.AddressRefs{{Name: "Source1"}},
+					Destinations:      model.AddressRefs{{Name: "Destination1"}, {Name: "Destination2"}},
+					NegateDestination: true,
+				},
+				Action: model.PolicyAction{Type: model.ActionDeny},
+			},
+			want: `add access-rule layer "Network" position bottom name "Policy with Destination-Negate Flag" source.1 "Source1" destination-negate true destination.1 "Destination1" destination.2 "Destination2" action "Reject"`,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ConvertPolicy(tt.policy)
+			ctx := NewContext()
+			got, err := ConvertPolicy(tt.policy, ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ConvertPolicy() error = %v, wantErr %v", err, tt.wantErr)
 				return

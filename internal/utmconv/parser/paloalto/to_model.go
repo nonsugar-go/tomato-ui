@@ -129,6 +129,18 @@ func ToModelAddressGroups(scopedAddrGrps []ScopedAddressGroup) ([]model.AddressG
 func ToModelServices(scopedSvcs []ScopedService) ([]model.Service, error) {
 	var result []model.Service
 
+	result = append(result, model.Service{
+		Name:  "service-http",
+		Type:  model.ServiceTypeTCP,
+		Ports: "80",
+	})
+
+	result = append(result, model.Service{
+		Name:  "service-https",
+		Type:  model.ServiceTypeTCP,
+		Ports: "443",
+	})
+
 	for _, ss := range scopedSvcs {
 		s := ss.Service
 

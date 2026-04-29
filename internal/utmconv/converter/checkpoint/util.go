@@ -31,3 +31,14 @@ func buildComment(desc string) string {
 func buildTags(tags []string) string {
 	return buildIndexedKV("tags", tags)
 }
+
+func mapStrings(in []string, m map[string]string) []string {
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if mv, ok := m[v]; ok {
+			v = mv
+		}
+		out = append(out, v)
+	}
+	return out
+}

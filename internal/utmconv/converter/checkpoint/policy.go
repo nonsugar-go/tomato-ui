@@ -8,12 +8,12 @@ import (
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
 )
 
-func ConvertPolicies(policies []model.Policy) ([]string, error) {
+func ConvertPolicies(policies []model.Policy, ctx *Context) ([]string, error) {
 	var results []string
 	var errs []error
 
 	for _, policy := range policies {
-		line, err := ConvertPolicy(policy)
+		line, err := ConvertPolicy(policy, ctx)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", policy.Name, err))
 			continue
@@ -26,7 +26,7 @@ func ConvertPolicies(policies []model.Policy) ([]string, error) {
 
 // ConvertPolicy converts a model.Policy to a Check Point access rule command.
 // NOTE: untested
-func ConvertPolicy(p model.Policy) (string, error) {
+func ConvertPolicy(p model.Policy, ctx *Context) (string, error) {
 	var sb strings.Builder
 	layer := "Network" // NOTE: untested
 
@@ -40,8 +40,16 @@ func ConvertPolicy(p model.Policy) (string, error) {
 	if p.Enabled == false {
 		sb.WriteString(` enabled false`)
 	}
-	sb.WriteString(buildIndexedKV("source", p.Match.Sources.Names()))
-	sb.WriteString(buildIndexedKV("destination", p.Match.Destinations.Names()))
+	src := mapStrings(p.Match.Sources.Names(), ctx.AddrMap)
+	dst := mapStrings(p.Match.Destinations.Names(), ctx.AddrMap)
+	if p.Match.NegateSource {
+		sb.WriteString(` source-negate true`)
+	}
+	sb.WriteString(buildIndexedKV("source", src))
+	if p.Match.NegateDestination {
+		sb.WriteString(` destination-negate true`)
+	}
+	sb.WriteString(buildIndexedKV("destination", dst))
 	sb.WriteString(buildIndexedKV("service", p.Match.Services.Names()))
 	action := normalizeAction(string(p.Action.Type))
 	sb.WriteString(buildKV("action", action))

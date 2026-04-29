@@ -89,6 +89,8 @@ func TestToModelServices(t *testing.T) {
 				{Scope: "shared", Service: Service{Name: "svc2", Protocol: Protocol{UDP: &UDP{Port: "53"}}, Description: "This is svc2"}},
 			},
 			want: []model.Service{
+				{Name: "service-http", Type: model.ServiceTypeTCP, Ports: "80"},
+				{Name: "service-https", Type: model.ServiceTypeTCP, Ports: "443"},
 				{Name: "svc1", Type: model.ServiceTypeTCP, Ports: "80", Description: "This is svc1"},
 				{Name: "svc2", Type: model.ServiceTypeUDP, Ports: "53", Description: "This is svc2"},
 			},

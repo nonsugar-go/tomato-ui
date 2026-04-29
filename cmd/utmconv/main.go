@@ -372,7 +372,7 @@ func main() {
 			slog.Info("Check Point のサービスグループ変換が終了しました",
 				"output", "checkpoint_service_group.conf")
 
-			lines, err = checkpoint.ConvertPolicies(app.Policies)
+			lines, err = checkpoint.ConvertPolicies(app.Policies, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
