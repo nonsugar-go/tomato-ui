@@ -9,7 +9,7 @@ import (
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
 )
 
-func ConvertServices(svcs []model.Service) ([]string, error) {
+func ConvertServices(svcs []model.Service, ctx *Context) ([]string, error) {
 	var results []string
 	var errs []error
 
@@ -18,7 +18,7 @@ func ConvertServices(svcs []model.Service) ([]string, error) {
 	})
 
 	for _, svc := range svcs {
-		line, err := ConvertService(svc)
+		line, err := ConvertService(svc, ctx)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", svc.Name, err))
 			continue
@@ -29,7 +29,7 @@ func ConvertServices(svcs []model.Service) ([]string, error) {
 	return results, errors.Join(errs...)
 }
 
-func ConvertService(svc model.Service) (string, error) {
+func ConvertService(svc model.Service, ctx *Context) (string, error) {
 	sourcePort := ""
 	if svc.SourcePorts != "" {
 		sourcePort = fmt.Sprintf(" source-port %s", svc.SourcePorts)
@@ -40,12 +40,18 @@ func ConvertService(svc model.Service) (string, error) {
 	switch svc.Type {
 
 	case model.ServiceTypeTCP:
+		if _, ok := ctx.SvcMap[svc.Name]; !ok {
+			ctx.SvcMap[svc.Name] = svc.Name
+		}
 		return fmt.Sprintf(
 			"add service-tcp name \"%s\" port %s%s%s%s",
 			svc.Name, svc.Ports, sourcePort, comment, tags,
 		), nil
 
 	case model.ServiceTypeUDP:
+		if _, ok := ctx.SvcMap[svc.Name]; !ok {
+			ctx.SvcMap[svc.Name] = svc.Name
+		}
 		return fmt.Sprintf(
 			"add service-udp name \"%s\" port %s%s%s%s",
 			svc.Name, svc.Ports, sourcePort, comment, tags,
@@ -56,7 +62,7 @@ func ConvertService(svc model.Service) (string, error) {
 	}
 }
 
-func ConvertServiceGroups(groups []model.ServiceGroup) ([]string, error) {
+func ConvertServiceGroups(groups []model.ServiceGroup, ctx *Context) ([]string, error) {
 	var results []string
 	var errs []error
 
@@ -65,7 +71,7 @@ func ConvertServiceGroups(groups []model.ServiceGroup) ([]string, error) {
 	})
 
 	for _, g := range groups {
-		line, err := ConvertServiceGroup(g)
+		line, err := ConvertServiceGroup(g, ctx)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", g.Name, err))
 			continue
@@ -76,7 +82,9 @@ func ConvertServiceGroups(groups []model.ServiceGroup) ([]string, error) {
 	return results, errors.Join(errs...)
 }
 
-func ConvertServiceGroup(g model.ServiceGroup) (string, error) {
+func ConvertServiceGroup(g model.ServiceGroup, ctx *Context) (string, error) {
+	var errs []error
+
 	if len(g.Members) == 0 {
 		return "", fmt.Errorf("group has no members")
 	}
@@ -84,13 +92,27 @@ func ConvertServiceGroup(g model.ServiceGroup) (string, error) {
 	comment := buildComment(g.Description)
 	tags := buildTags(g.Tags)
 
+	mapped := make([]string, 0, len(g.Members))
+	for _, m := range g.Members {
+		if v, ok := ctx.SvcMap[m]; ok {
+			m = v
+		} else {
+			errs = append(errs, fmt.Errorf("could not find member '%s' to add to group '%s'", m, g.Name))
+		}
+		mapped = append(mapped, m)
+	}
+
 	var sb strings.Builder
 	sb.WriteString(`add service-group name "`)
 	sb.WriteString(g.Name)
 	sb.WriteString(`"`)
-	sb.WriteString(buildIndexedKV("members", g.Members))
+	sb.WriteString(buildIndexedKV("members", mapped))
 	sb.WriteString(comment)
 	sb.WriteString(tags)
 
-	return sb.String(), nil
+	if _, ok := ctx.SvcMap[g.Name]; !ok {
+		ctx.SvcMap[g.Name] = g.Name
+	}
+
+	return sb.String(), errors.Join(errs...)
 }

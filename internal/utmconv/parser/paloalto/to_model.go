@@ -2,6 +2,7 @@ package paloalto
 
 import (
 	"cmp"
+	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -37,7 +38,7 @@ func fillModel(app *model.App, palo *PaloAltoConfig) error {
 	}
 	slog.Info("サービスグループが変換されました", "count", len(app.ServiceGroups))
 
-	if app.Policies, err = ToModelPolicies(palo.SecurityRules); err != nil {
+	if app.Policies, err = ToModelPolicies(palo.SecurityRules, app.AppConfig.PaloAlto.Conf.ApplicationDefaultReplacementMap.Value); err != nil {
 		return err
 	}
 	slog.Info("ポリシーが変換されました", "count", len(app.Policies))
@@ -129,17 +130,17 @@ func ToModelAddressGroups(scopedAddrGrps []ScopedAddressGroup) ([]model.AddressG
 func ToModelServices(scopedSvcs []ScopedService) ([]model.Service, error) {
 	var result []model.Service
 
-	result = append(result, model.Service{
-		Name:  "service-http",
-		Type:  model.ServiceTypeTCP,
-		Ports: "80",
-	})
+	// result = append(result, model.Service{
+	// 	Name:  "service-http",
+	// 	Type:  model.ServiceTypeTCP,
+	// 	Ports: "80",
+	// })
 
-	result = append(result, model.Service{
-		Name:  "service-https",
-		Type:  model.ServiceTypeTCP,
-		Ports: "443",
-	})
+	// result = append(result, model.Service{
+	// 	Name:  "service-https",
+	// 	Type:  model.ServiceTypeTCP,
+	// 	Ports: "443",
+	// })
 
 	for _, ss := range scopedSvcs {
 		s := ss.Service
@@ -193,8 +194,41 @@ func ToModelServiceGroups(scopedSvcGrps []ScopedServiceGroup) ([]model.ServiceGr
 	return result, nil
 }
 
-func ToModelPolicies(scopedSecurities []ScopedSecurity) ([]model.Policy, error) {
+func getUniqueTags(groupTag string, tags []string) []string {
+	result := make([]string, 0, len(tags)+1)
+	seen := make(map[string]struct{})
+
+	add := func(t string) {
+		if t != "" {
+			if _, ok := seen[t]; !ok {
+				seen[t] = struct{}{}
+				result = append(result, t)
+			}
+		}
+	}
+
+	add(groupTag)
+
+	for _, t := range tags {
+		add(t)
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func ToModelPolicies(scopedSecurities []ScopedSecurity, appSvcMap []model.AppSvcMap) ([]model.Policy, error) {
 	var result []model.Policy
+
+	scopeRulebase := func(scope, rulebase string) string {
+		switch rulebase {
+		case "":
+			return scope
+		}
+		return fmt.Sprintf("%s-%s", scope, rulebase)
+	}
 
 	for _, ss := range scopedSecurities {
 		rule := ss.SecurityRule
@@ -212,7 +246,7 @@ func ToModelPolicies(scopedSecurities []ScopedSecurity) ([]model.Policy, error) 
 				Destinations: toAddrRefs(rule.Destinations),
 
 				Applications: rule.Applications,
-				Services:     toSvcRefs(rule.Services, rule.Applications),
+				Services:     toSvcRefs(rule.Services, rule.Applications, appSvcMap),
 
 				Users: rule.SourceUsers,
 				HIPs:  append(rule.SourceHIP, rule.DestinationHIP...),
@@ -227,14 +261,16 @@ func ToModelPolicies(scopedSecurities []ScopedSecurity) ([]model.Policy, error) 
 			},
 
 			Logging: model.Logging{
-				LogAtStart: rule.LogStart == "yes",
-				LogAtEnd:   rule.LogEnd == "yes",
+				LogAtStart: rule.LogStart == "yes", // default: no
+				LogAtEnd:   rule.LogEnd != "no",    // default: yes
 				LogProfile: rule.LogSetting,
 			},
 
 			Schedule: rule.Schedule,
-			Tags:     rule.Tags,
+			Tags:     getUniqueTags(rule.GroupTag, rule.Tags),
 			Group:    rule.GroupTag,
+
+			Scope: scopeRulebase(ss.Scope, ss.Rulebase),
 		}
 
 		result = append(result, policy)
@@ -280,7 +316,7 @@ func normalizeName(s string) string {
 	return s
 }
 
-func toSvcRefs(names []string, apps []string) []model.ServiceRef {
+func toSvcRefs(names []string, apps []string, appSvcMap []model.AppSvcMap) []model.ServiceRef {
 	if len(names) == 0 {
 		return nil
 	}
@@ -300,26 +336,42 @@ func toSvcRefs(names []string, apps []string) []model.ServiceRef {
 				normalizeApp := normalizeName(a)
 				appToService := []string{}
 
-				switch normalizeApp {
-				case "":
+				// switch normalizeApp {
+				// case "":
+				// 	// "any"
+				// 	continue
+				// case "icmp":
+				// 	appToService = append(appToService, "icmp-proto")
+				// case "ping":
+				// 	appToService = append(appToService, "echo-request")
+				// case "traceroute":
+				// 	appToService = append(appToService, "traceroute")
+				// case "ssh":
+				// 	appToService = append(appToService, "ssh")
+				// case "syslog":
+				// 	appToService = append(appToService, "syslog")
+				// case "ipsec-esp", "ipsec-esp-udp":
+				// 	appToService = append(appToService, "ESP")
+				// 	appToService = append(appToService, "IKE")
+				// 	appToService = append(appToService, "IKE_NAT_TRAVERSAL")
+				// default:
+				// 	slog.Warn("cannot handle application-default for app", "app", a)
+				// }
+				if normalizeApp == "" {
 					// "any"
 					continue
-				case "icmp":
-					appToService = append(appToService, "icmp-proto")
-				case "ping":
-					appToService = append(appToService, "echo-request")
-				case "traceroute":
-					appToService = append(appToService, "traceroute")
-				case "ssh":
-					appToService = append(appToService, "ssh")
-				case "syslog":
-					appToService = append(appToService, "syslog")
-				case "ipsec-esp", "ipsec-esp-udp":
-					appToService = append(appToService, "ESP")
-					appToService = append(appToService, "IKE")
-					appToService = append(appToService, "IKE_NAT_TRAVERSAL")
-				default:
-					slog.Warn("cannot handle application-default for app", "app", a)
+				} else {
+					isFound := false
+					for _, v := range appSvcMap {
+						if normalizeApp == v.Application {
+							isFound = true
+							appToService = append(appToService, v.Services...)
+							break
+						}
+					}
+					if !isFound {
+						slog.Warn("cannot handle application-default for app", "app", a)
+					}
 				}
 				for _, s := range appToService {
 					if _, ok := seen[s]; ok {

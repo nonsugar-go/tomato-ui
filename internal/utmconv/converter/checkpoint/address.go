@@ -50,7 +50,9 @@ func ConvertAddress(addr model.Address, ctx *Context) (string, error) {
 					ipaddr = ip.String()
 				}
 				// host
-				ctx.AddrMap[addr.Name] = addr.Name
+				if _, ok := ctx.AddrMap[addr.Name]; !ok {
+					ctx.AddrMap[addr.Name] = addr.Name
+				}
 				return fmt.Sprintf(
 					"add host name \"%s\" ipv4-address %s%s%s",
 					addr.Name, ipaddr, comment, tags,
@@ -59,7 +61,9 @@ func ConvertAddress(addr model.Address, ctx *Context) (string, error) {
 			ip, ipnet, err := net.ParseCIDR(addr.Value)
 			if err == nil {
 				length, _ := ipnet.Mask.Size()
-				ctx.AddrMap[addr.Name] = addr.Name
+				if _, ok := ctx.AddrMap[addr.Name]; !ok {
+					ctx.AddrMap[addr.Name] = addr.Name
+				}
 				return fmt.Sprintf(
 					"add network name \"%s\" subnet4 %s mask-length4 %d%s%s",
 					addr.Name, ip.String(), length, comment, tags,
@@ -83,7 +87,9 @@ func ConvertAddress(addr model.Address, ctx *Context) (string, error) {
 			ip, ipnet, err := net.ParseCIDR(addr.Value)
 			if err == nil {
 				length, _ := ipnet.Mask.Size()
-				ctx.AddrMap[addr.Name] = addr.Name
+				if _, ok := ctx.AddrMap[addr.Name]; !ok {
+					ctx.AddrMap[addr.Name] = addr.Name
+				}
 				return fmt.Sprintf(
 					"add network name \"%s\" subnet6 %s mask-length6 %d%s%s",
 					addr.Name, ip.String(), length, comment, tags,
@@ -103,7 +109,9 @@ func ConvertAddress(addr model.Address, ctx *Context) (string, error) {
 			comment = buildComment(addr.Name)
 		}
 
-		ctx.AddrMap[addr.Name] = "." + addr.Value
+		if _, ok := ctx.AddrMap[addr.Name]; !ok {
+			ctx.AddrMap[addr.Name] = "." + addr.Value
+		}
 		return fmt.Sprintf(
 			"add dns-domain name \".%s\" is-sub-domain false%s%s",
 			addr.Value, comment, tags,
@@ -154,7 +162,9 @@ func BuildEmptyGroups(groups []model.AddressGroup, ctx *Context) ([]string, erro
 		sb.WriteString(tags)
 
 		results = append(results, sb.String())
-		ctx.AddrMap[g.Name] = g.Name
+		if _, ok := ctx.AddrMap[g.Name]; !ok {
+			ctx.AddrMap[g.Name] = g.Name
+		}
 	}
 
 	return results, errors.Join(errs...)
@@ -182,6 +192,8 @@ func BuildGroupMembers(groups []model.AddressGroup, ctx *Context) ([]string, err
 			for _, m := range chunk {
 				if v, ok := ctx.AddrMap[m]; ok {
 					m = v
+				} else {
+					errs = append(errs, fmt.Errorf("could not find member '%s' to add to group '%s'", m, g.Name))
 				}
 				mapped = append(mapped, m)
 			}

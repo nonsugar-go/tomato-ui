@@ -1,6 +1,7 @@
 package checkpoint
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -100,9 +101,9 @@ func TestConvertAddress(t *testing.T) {
 		},
 	}
 
+	ctx := NewContext(&model.App{})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
 			got, err := ConvertAddress(tt.address, ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("convertAddress() error = %v, wantErr %v", err, tt.wantErr)
@@ -155,9 +156,15 @@ func TestConvertAddressGroups(t *testing.T) {
 		},
 	}
 
+	ctx := NewContext(&model.App{})
+	ctx.AddrMap = make(map[string]string)
+	for i := 1; i <= 3; i++ {
+		member := fmt.Sprintf("Member%d", i)
+		ctx.AddrMap[member] = member
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
 			got, err := ConvertAddressGroups(tt.groups, ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ConvertAddressGroups() error = %v, wantErr %v", err, tt.wantErr)
@@ -216,9 +223,9 @@ func TestBuildEmptyGroups(t *testing.T) {
 		},
 	}
 
+	ctx := NewContext(&model.App{})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
 			got, err := BuildEmptyGroups(tt.groups, ctx)
 			if err != nil {
 				t.Errorf("BuildEmptyGroups() error = %v", err)
@@ -290,9 +297,18 @@ func TestBuildGroupMembers(t *testing.T) {
 		},
 	}
 
+	ctx := NewContext(&model.App{})
+	ctx.AddrMap = make(map[string]string)
+	for i := 1; i <= 3; i++ {
+		member := fmt.Sprintf("Member%d", i)
+		ctx.AddrMap[member] = member
+	}
+	for i := 1; i <= 44; i++ {
+		member := fmt.Sprintf("m%d", i)
+		ctx.AddrMap[member] = member
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := NewContext()
 			got, err := BuildGroupMembers(tt.groups, ctx)
 			if err != nil {
 				t.Errorf("BuildGroupMembers() error = %v", err)

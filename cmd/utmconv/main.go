@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/converter/checkpoint"
@@ -214,6 +216,43 @@ func (m modelTUI) headerView() string {
 	) + "\n\n🍅 Ready!\n\n"
 }
 
+const appConfigFilename = "utmconv.json"
+
+func loadOrInitConfig(path string) (*model.AppConfig, error) {
+	pwd, _ := os.Getwd()
+	fullPath := filepath.Join(pwd, path)
+
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		defaultCfg := model.NewDefaultAppConfig()
+
+		data, err := json.MarshalIndent(defaultCfg, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal default config: %w", err)
+		}
+
+		if err := os.WriteFile(fullPath, data, 0644); err != nil {
+			return nil, fmt.Errorf("failed to write config file: %w", err)
+		}
+
+		slog.Info("設定ファイルが見つからないため、デフォルト値で生成します", "filename", path)
+		slog.Info("設定ファイルを確認・編集後、utmconv を再実行してください")
+		os.Exit(0)
+	}
+
+	slog.Info("設定ファイルを読み込みます", "filename", path)
+	file, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg model.AppConfig
+	if err := json.Unmarshal(file, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return &cfg, nil
+}
+
 func writeMgmtLines(filename string, lines []string, app model.App) error {
 	f, err := os.Create(filename)
 	if err != nil {
@@ -221,15 +260,22 @@ func writeMgmtLines(filename string, lines []string, app model.App) error {
 	}
 	defer f.Close()
 
-	fmt.Fprintln(f, `mgmt_cli login -u secadmin -p Lab@12345 >sid.txt`)
+	fmt.Fprintf(f, "mgmt_cli login -u %s -p %s >sid.txt\n",
+		app.AppConfig.CheckPoint.Cli.MgmtCliUser.Value,
+		app.AppConfig.CheckPoint.Cli.MgmtCliPassword.Value)
 	for _, line := range lines {
-		fmt.Fprint(f, "mgmt_cli "+line)
-		if app.IgnoreWarnings {
-			fmt.Fprint(f, ` ignore-warnings true`)
+		if strings.HasPrefix(line, "#") {
+			fmt.Fprintln(f, line)
+		} else {
+			fmt.Fprint(f, "mgmt_cli "+line)
+			if app.AppConfig.CheckPoint.Cli.IgnoreWarnings.Value {
+				fmt.Fprint(f, ` ignore-warnings true`)
+			}
+			fmt.Fprintln(f, ` -s sid.txt`)
 		}
-		fmt.Fprintln(f, ` -s sid.txt`)
 	}
-	fmt.Fprintln(f, `mgmt_cli discard -s sid.txt
+	fmt.Fprintln(f, `#
+mgmt_cli discard -s sid.txt
 # mgmt_cli publish -s sid.txt
 mgmt_cli logout -s sid.txt
 rm sid.txt`)
@@ -243,10 +289,16 @@ func main() {
 	slog.SetDefault(slog.New(handler))
 	var app model.App
 
+	cfg, err := loadOrInitConfig(appConfigFilename)
+	if err != nil {
+		slog.Error("設定ファイルの読み込みに失敗", "error", err.Error(), "filename", appConfigFilename)
+		os.Exit(1)
+	}
+	app.AppConfig = *cfg
+
 	flag.StringVar(&app.Filename, "in", "", "comfig file")
 	flag.StringVar(&app.Vendor, "vendor", "panorama", "vendor type")
 	flag.StringVar(&app.To, "to", "cp", "output format")
-	flag.BoolVar(&app.IgnoreWarnings, "ignore-warnings", false, "ignore warnings during conversion")
 	flag.Parse()
 
 	p := tea.NewProgram(initialModel())
@@ -298,13 +350,6 @@ func main() {
 					).
 					Value(&app.To),
 			),
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title("変換時の警告を無視しますか？").
-					Affirmative("はい").
-					Negative("いいえ").
-					Value(&app.IgnoreWarnings),
-			),
 		)
 		if err := form.Run(); err != nil {
 			log.Fatal(err)
@@ -313,7 +358,6 @@ func main() {
 		slog.Info("対象ベンダ", "vendor", app.Vendor)
 		slog.Info("設定ファイル", "config_file", app.Filename)
 		slog.Info("変換形式", "to", app.To)
-		slog.Info("変換時の警告を無視", "ignore_warnings", app.IgnoreWarnings)
 
 		form = huh.NewForm(
 			huh.NewGroup(
@@ -339,7 +383,7 @@ func main() {
 		case "json":
 			slog.Warn("JSON output is not implemented yet")
 		case "cp":
-			ctx := checkpoint.NewContext()
+			ctx := checkpoint.NewContext(&app)
 			lines, err := checkpoint.ConvertAddresses(app.Addresses, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
@@ -356,7 +400,7 @@ func main() {
 			slog.Info("Check Point のアドレスグループ変換が終了しました",
 				"output", "checkpoint_address_group.conf")
 
-			lines, err = checkpoint.ConvertServices(app.Services)
+			lines, err = checkpoint.ConvertServices(app.Services, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
@@ -364,7 +408,7 @@ func main() {
 			slog.Info("Check Point のサービス変換が終了しました",
 				"output", "checkpoint_service.conf")
 
-			lines, err = checkpoint.ConvertServiceGroups(app.ServiceGroups)
+			lines, err = checkpoint.ConvertServiceGroups(app.ServiceGroups, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}

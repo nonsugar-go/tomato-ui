@@ -51,9 +51,13 @@ func TestConvertService(t *testing.T) {
 		},
 	}
 
+	var app model.App
+	app.AppConfig = *model.NewDefaultAppConfig()
+	ctx := NewContext(&app)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ConvertService(tt.service)
+			got, err := ConvertService(tt.service, ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ConvertService() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -94,11 +98,28 @@ func TestConvertServiceGroup(t *testing.T) {
 			want:    "",
 			wantErr: true,
 		},
+		{
+			name: "Service group with map members",
+			group: model.ServiceGroup{
+				Name:        "Web-Services",
+				Members:     []string{"service-http", "service-https"},
+				Description: "Service group with map members",
+				Tags:        []string{"web", "group"},
+			},
+			want:    `add service-group name "Web-Services" members.1 "http" members.2 "https" comments "Service group with map members" tags.1 "web" tags.2 "group"`,
+			wantErr: false,
+		},
 	}
+
+	var app model.App
+	app.AppConfig = *model.NewDefaultAppConfig()
+	ctx := NewContext(&app)
+	ctx.SvcMap["HTTP-Service"] = "HTTP-Service"
+	ctx.SvcMap["HTTPS-Service"] = "HTTPS-Service"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ConvertServiceGroup(tt.group)
+			got, err := ConvertServiceGroup(tt.group, ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ConvertServiceGroup() error = %v, wantErr %v", err, tt.wantErr)
 				return

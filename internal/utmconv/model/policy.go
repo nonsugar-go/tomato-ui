@@ -19,6 +19,8 @@ type Policy struct {
 	Tags     []string
 	Group    string
 
+	Scope string // "shared", "dg1-post", "global", "layer1" など自由
+
 	// 拡張（ベンダー依存吸収用）
 	Extensions map[string]any
 }
