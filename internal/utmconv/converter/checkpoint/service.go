@@ -13,11 +13,18 @@ func ConvertServices(svcs []model.Service, ctx *Context) ([]string, error) {
 	var results []string
 	var errs []error
 
-	sort.SliceStable(svcs, func(i, j int) bool {
-		return strings.ToLower(svcs[i].Name) < strings.ToLower(svcs[j].Name)
+	customSvcs := make([]model.Service, 0, len(svcs))
+	for _, svc := range svcs {
+		if _, ok := ctx.SvcMap[svc.Name]; !ok {
+			customSvcs = append(customSvcs, svc)
+		}
+	}
+
+	sort.SliceStable(customSvcs, func(i, j int) bool {
+		return strings.ToLower(customSvcs[i].Name) < strings.ToLower(customSvcs[j].Name)
 	})
 
-	for _, svc := range svcs {
+	for _, svc := range customSvcs {
 		line, err := ConvertService(svc, ctx)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", svc.Name, err))
@@ -66,11 +73,18 @@ func ConvertServiceGroups(groups []model.ServiceGroup, ctx *Context) ([]string, 
 	var results []string
 	var errs []error
 
-	sort.SliceStable(groups, func(i, j int) bool {
-		return strings.ToLower(groups[i].Name) < strings.ToLower(groups[j].Name)
+	customGroups := make([]model.ServiceGroup, 0, len(groups))
+	for _, group := range groups {
+		if _, ok := ctx.SvcMap[group.Name]; !ok {
+			customGroups = append(customGroups, group)
+		}
+	}
+
+	sort.SliceStable(customGroups, func(i, j int) bool {
+		return strings.ToLower(customGroups[i].Name) < strings.ToLower(customGroups[j].Name)
 	})
 
-	for _, g := range groups {
+	for _, g := range customGroups {
 		line, err := ConvertServiceGroup(g, ctx)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", g.Name, err))

@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nonsugar-go/tomato-ui/internal/utmconv/converter/checkpoint"
+	conv_checkpoint "github.com/nonsugar-go/tomato-ui/internal/utmconv/converter/checkpoint"
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
+	"github.com/nonsugar-go/tomato-ui/internal/utmconv/parser/checkpoint"
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/parser/paloalto"
 
 	"time"
@@ -325,9 +326,9 @@ func main() {
 					Description("⏎ を押した後に、ベンダーを選択してください\n\n\n\n\n\n\n").
 					Options(
 						huh.NewOption("Panorama", "panorama"),
+						huh.NewOption("Checkpoint (作成中)", "cp"),
 						// huh.NewOption("PaloAlto", "pa"),
 						// huh.NewOption("FortiGate", "fg"),
-						// huh.NewOption("Checkpoint", "cp"),
 					).
 					Value(&app.Vendor),
 			),
@@ -383,8 +384,8 @@ func main() {
 		case "json":
 			slog.Warn("JSON output is not implemented yet")
 		case "cp":
-			ctx := checkpoint.NewContext(&app)
-			lines, err := checkpoint.ConvertAddresses(app.Addresses, ctx)
+			ctx := conv_checkpoint.NewContext(&app)
+			lines, err := conv_checkpoint.ConvertAddresses(app.Addresses, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
@@ -392,7 +393,7 @@ func main() {
 			slog.Info("Check Point のアドレス変換が終了しました",
 				"output", "checkpoint_address.conf")
 
-			lines, err = checkpoint.ConvertAddressGroups(app.AddressGroups, ctx)
+			lines, err = conv_checkpoint.ConvertAddressGroups(app.AddressGroups, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
@@ -400,7 +401,7 @@ func main() {
 			slog.Info("Check Point のアドレスグループ変換が終了しました",
 				"output", "checkpoint_address_group.conf")
 
-			lines, err = checkpoint.ConvertServices(app.Services, ctx)
+			lines, err = conv_checkpoint.ConvertServices(app.Services, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
@@ -408,7 +409,7 @@ func main() {
 			slog.Info("Check Point のサービス変換が終了しました",
 				"output", "checkpoint_service.conf")
 
-			lines, err = checkpoint.ConvertServiceGroups(app.ServiceGroups, ctx)
+			lines, err = conv_checkpoint.ConvertServiceGroups(app.ServiceGroups, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
@@ -416,7 +417,7 @@ func main() {
 			slog.Info("Check Point のサービスグループ変換が終了しました",
 				"output", "checkpoint_service_group.conf")
 
-			lines, err = checkpoint.ConvertPolicies(app.Policies, ctx)
+			lines, err = conv_checkpoint.ConvertPolicies(app.Policies, ctx)
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
@@ -427,6 +428,9 @@ func main() {
 		default:
 			slog.Error("unsupported output", "to", app.To)
 		}
+	case "cp":
+		checkpoint.ParseCheckPoint(&app)
+		slog.Info("Check Point の解析が終了しました", "output", "checkpoint.xlsx")
 	default:
 		slog.Error("Vendor の指定は未実装です", "vendor", app.Vendor)
 	}
