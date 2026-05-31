@@ -72,7 +72,7 @@ func TestConvertPolicy(t *testing.T) {
 				Action:  model.PolicyAction{Type: model.ActionDeny},
 				Logging: model.Logging{LogAtStart: true, LogAtEnd: true},
 			},
-			want: `add access-rule layer "Network" position.bottom "New rules" name "Policy with Sources and Destinations" source.1 "Source1" source.2 "Source2" destination.1 "Destination1" service.1 "Any" action "Drop" track.type "Log"`,
+			want: `add access-rule layer "Network" position.bottom "New rules" name "Policy with Sources and Destinations" source.1 "Source1" source.2 "Source2" destination.1 "Destination1" service.1 "Any" action "Drop" track.type "Log" track.accounting false`,
 		},
 		{
 			name: "Policy with tags",

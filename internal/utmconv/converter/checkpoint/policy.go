@@ -98,6 +98,8 @@ func ConvertPolicy(p model.Policy, ctx *Context) (string, error) {
 		sb.WriteString(` track.type "Log"`)
 		if p.Action.Type == model.ActionAllow {
 			sb.WriteString(` track.accounting true`)
+		} else {
+			sb.WriteString(` track.accounting false`)
 		}
 	}
 	sb.WriteString(buildComment(p.Description))

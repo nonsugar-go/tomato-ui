@@ -410,7 +410,7 @@ func TestToModelNATs(t *testing.T) {
 					Type:          model.NATTypeStatic,
 					BiDirectional: true,
 
-					Targets: []string{"shared-pre"},
+					Scope: "shared-pre",
 				},
 			},
 		},
@@ -438,7 +438,7 @@ func TestToModelNATs(t *testing.T) {
 					Enabled:          true,
 					TranslatedSource: []string{"203.0.113.1"},
 					Type:             model.NATTypeHide,
-					Targets:          []string{"shared"},
+					Scope:            "shared",
 				},
 			},
 		},
