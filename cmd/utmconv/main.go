@@ -421,9 +421,17 @@ func main() {
 			if err != nil {
 				slog.Error("convert error:", "err", err)
 			}
-			writeMgmtLines("checkpoint_policy.conf", lines, app) // NOTE: untested
+			writeMgmtLines("checkpoint_policy.conf", lines, app)
 			slog.Info("Check Point のポリシー変換が終了しました",
 				"output", "checkpoint_policy.conf")
+
+			lines, err = conv_checkpoint.ConvertNATPolicies(app.NATRules, ctx)
+			if err != nil {
+				slog.Error("convert error:", "err", err)
+			}
+			writeMgmtLines("checkpoint_nat.conf", lines, app)
+			slog.Info("Check Point の NAT 変換が終了しました",
+				"output", "checkpoint_nat.conf")
 
 		default:
 			slog.Error("unsupported output", "to", app.To)

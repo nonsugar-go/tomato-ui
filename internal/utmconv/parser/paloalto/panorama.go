@@ -15,6 +15,7 @@ import (
 func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 	var result PaloAltoConfig
 
+	// Tags
 	for _, tag := range c.Shared.Tags {
 		result.TagObject = append(result.TagObject, ScopedTagObject{
 			Scope:     "shared",
@@ -31,6 +32,7 @@ func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 		}
 	}
 
+	// Addresses
 	for _, addr := range c.Shared.Addresses {
 		result.Addresses = append(result.Addresses, ScopedAddress{
 			Scope:   "shared",
@@ -47,6 +49,7 @@ func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 		}
 	}
 
+	// Address Groups
 	for _, addrGrp := range c.Shared.AddressGroups {
 		result.AddressGroups = append(result.AddressGroups, ScopedAddressGroup{
 			Scope: "shared",
@@ -63,6 +66,7 @@ func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 		}
 	}
 
+	// Services
 	for _, svc := range c.Shared.Services {
 		result.Services = append(result.Services, ScopedService{
 			Scope:   "shared",
@@ -79,6 +83,7 @@ func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 		}
 	}
 
+	// Service Groups
 	for _, svcGrp := range c.Shared.ServiceGroups {
 		result.ServiceGroups = append(result.ServiceGroups, ScopedServiceGroup{
 			Scope: "shared",
@@ -95,6 +100,7 @@ func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 		}
 	}
 
+	// Security Rules
 	for _, rule := range c.Shared.PreRulebase.Security.Rules {
 		result.SecurityRules = append(result.SecurityRules, ScopedSecurity{
 			Scope:        "shared",
@@ -127,6 +133,43 @@ func BuildPaloAltoConfig(c *Config) *PaloAltoConfig {
 				Scope:        dg.Name,
 				Rulebase:     "post",
 				SecurityRule: rule,
+			})
+		}
+	}
+
+	// NAT Rules
+	for _, rule := range c.Shared.PreRulebase.Nat.Rules {
+		result.NATRules = append(result.NATRules, ScopedNAT{
+			Scope:    "shared",
+			Rulebase: "pre",
+			NATRule:  rule,
+		})
+	}
+
+	for _, rule := range c.Shared.PostRulebase.Nat.Rules {
+		result.NATRules = append(result.NATRules, ScopedNAT{
+			Scope:    "shared",
+			Rulebase: "post",
+			NATRule:  rule,
+		})
+	}
+
+	for _, dg := range c.Devices.DeviceGroups {
+		for _, rule := range dg.PreRulebase.Nat.Rules {
+			result.NATRules = append(result.NATRules, ScopedNAT{
+				Scope:    dg.Name,
+				Rulebase: "pre",
+				NATRule:  rule,
+			})
+		}
+	}
+
+	for _, dg := range c.Devices.DeviceGroups {
+		for _, rule := range dg.PostRulebase.Nat.Rules {
+			result.NATRules = append(result.NATRules, ScopedNAT{
+				Scope:    dg.Name,
+				Rulebase: "post",
+				NATRule:  rule,
 			})
 		}
 	}
@@ -384,6 +427,7 @@ func printNatRules(scope string, rules []NATRule, e *excel.Excel) {
 		e.Println(
 			scope,
 			rule.Name,
+			rule.Disabled,
 			strings.Join(rule.FromZones, ";"),
 			strings.Join(rule.ToZones, ";"),
 			strings.Join(rule.Sources, ";"),
@@ -497,7 +541,7 @@ func ParsePanorama(app *model.App) {
 	e.AddTable()
 
 	e.NewSheet("NAT Rules")
-	e.Println("Scope", "Name", "From Zones", "To Zones", "Sources", "Destinations",
+	e.Println("Scope", "Name", "Disabled", "From Zones", "To Zones", "Sources", "Destinations",
 		"Service", "Source Translation", "Destination Translation", "Description")
 	printNatRules("shared-pre", config.Shared.PreRulebase.Nat.Rules, e)
 	printNatRules("shared-post", config.Shared.PostRulebase.Nat.Rules, e)

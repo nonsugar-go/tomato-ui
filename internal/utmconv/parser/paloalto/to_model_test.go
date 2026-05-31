@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
 )
 
@@ -352,6 +353,262 @@ func TestToModelPolicies(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("ToModelPolicies() \ngot = %#v,\nwant %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToModelNATs(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []ScopedNAT
+		want  []model.NATRule
+	}{
+		{
+			name: "static nat",
+			input: []ScopedNAT{
+				{
+					Scope:    "shared",
+					Rulebase: "pre",
+					NATRule: NATRule{
+						Name:        "static-web",
+						UUID:        "uuid-1",
+						Description: "static nat",
+
+						FromZones: []string{"trust"},
+						ToZones:   []string{"untrust"},
+
+						Sources:      []string{"web01"},
+						Destinations: []string{"any"},
+						Service:      "service-http",
+
+						SourceTranslation: &SourceTranslation{
+							StaticIP: &StaticIP{
+								TranslatedAddress: "203.0.113.10",
+								BiDirectional:     "yes",
+							},
+						},
+					},
+				},
+			},
+			want: []model.NATRule{
+				{
+					ID:          "uuid-1",
+					Name:        "static-web",
+					Enabled:     true,
+					Description: "static nat",
+
+					FromZones: []string{"trust"},
+					ToZones:   []string{"untrust"},
+
+					OriginalSource:      []string{"web01"},
+					OriginalDestination: []string{},
+					OriginalService:     []string{"service-http"},
+
+					TranslatedSource: []string{"203.0.113.10"},
+
+					Type:          model.NATTypeStatic,
+					BiDirectional: true,
+
+					Targets: []string{"shared-pre"},
+				},
+			},
+		},
+		{
+			name: "hide nat",
+			input: []ScopedNAT{
+				{
+					Scope: "shared",
+					NATRule: NATRule{
+						Name: "hide",
+
+						SourceTranslation: &SourceTranslation{
+							DynamicIPAndPort: &DynamicIPAndPort{
+								TranslatedAddress: []string{
+									"203.0.113.1",
+								},
+							},
+						},
+					},
+				},
+			},
+			want: []model.NATRule{
+				{
+					Name:             "hide",
+					Enabled:          true,
+					TranslatedSource: []string{"203.0.113.1"},
+					Type:             model.NATTypeHide,
+					Targets:          []string{"shared"},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ToModelNATs(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("(-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestToNATType(t *testing.T) {
+	tests := []struct {
+		name string
+		rule NATRule
+		want model.NATType
+	}{
+		{
+			name: "static",
+			rule: NATRule{
+				SourceTranslation: &SourceTranslation{
+					StaticIP: &StaticIP{},
+				},
+			},
+			want: model.NATTypeStatic,
+		},
+		{
+			name: "hide",
+			rule: NATRule{
+				SourceTranslation: &SourceTranslation{
+					DynamicIPAndPort: &DynamicIPAndPort{},
+				},
+			},
+			want: model.NATTypeHide,
+		},
+		{
+			name: "no nat",
+			rule: NATRule{},
+			want: model.NATTypeNoNAT,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toNATType(tt.rule)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("(-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestToTranslatedDestination(t *testing.T) {
+	tests := []struct {
+		name string
+		rule NATRule
+		want []string
+	}{
+		{
+			name: "translated address",
+			rule: NATRule{
+				DestinationTranslation: &DestinationTranslation{
+					TranslatedAddress: "10.0.0.10",
+				},
+			},
+			want: []string{"10.0.0.10"},
+		},
+		{
+			name: "empty translated address",
+			rule: NATRule{
+				DestinationTranslation: &DestinationTranslation{},
+			},
+			want: nil,
+		},
+		{
+			name: "nil destination translation",
+			rule: NATRule{},
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toTranslatedDestination(tt.rule)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("(-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestToTranslatedService(t *testing.T) {
+	tests := []struct {
+		name string
+		rule NATRule
+		want []string
+	}{
+		{
+			name: "translated port",
+			rule: NATRule{
+				DestinationTranslation: &DestinationTranslation{
+					TranslatedPort: "8443",
+				},
+			},
+			want: []string{"8443"},
+		},
+		{
+			name: "empty translated port",
+			rule: NATRule{
+				DestinationTranslation: &DestinationTranslation{},
+			},
+			want: nil,
+		},
+		{
+			name: "nil destination translation",
+			rule: NATRule{},
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toTranslatedService(tt.rule)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("(-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestToServices(t *testing.T) {
+	tests := []struct {
+		name    string
+		service string
+		want    []string
+	}{
+		{
+			name:    "normal service",
+			service: "service-http",
+			want:    []string{"service-http"},
+		},
+		{
+			name:    "any",
+			service: "any",
+			want:    nil,
+		},
+		{
+			name:    "empty",
+			service: "",
+			want:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toServices(tt.service)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("(-want +got)\n%s", diff)
 			}
 		})
 	}

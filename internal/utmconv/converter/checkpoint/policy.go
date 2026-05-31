@@ -63,7 +63,6 @@ func ConvertPolicies(policies []model.Policy, ctx *Context) ([]string, error) {
 }
 
 // ConvertPolicy converts a model.Policy to a Check Point access rule command.
-// NOTE: untested
 func ConvertPolicy(p model.Policy, ctx *Context) (string, error) {
 	var errs []error
 	var sb strings.Builder

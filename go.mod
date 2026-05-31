@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v1.0.0
+	github.com/google/go-cmp v0.7.0
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/xuri/excelize/v2 v2.10.1
 )

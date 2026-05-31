@@ -51,3 +51,11 @@ func mapStrings(in []string, m map[string]string) ([]string, error) {
 	}
 	return out, nil
 }
+
+func mapStringsOrDefault(in []string, m map[string]string, defaultVal string) ([]string, error) {
+	out, err := mapStrings(in, m)
+	if len(out) == 0 {
+		return []string{defaultVal}, err
+	}
+	return out, err
+}

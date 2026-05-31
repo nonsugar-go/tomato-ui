@@ -11,6 +11,7 @@ type App struct {
 	Services      []Service
 	ServiceGroups []ServiceGroup
 	Policies      []Policy
+	NATRules      []NATRule
 }
 
 type AppConfig struct {
@@ -53,15 +54,35 @@ type CheckPointCli struct {
 		Value       string `json:"value"`
 	} `json:"access_rule_section"`
 
+	NatRulePackage struct {
+		Description string `json:"_description"`
+		Value       string `json:"value"`
+	} `json:"nat_rule_package"`
+
 	PredefinedServices struct {
 		Description string   `json:"_description"`
 		Value       []string `json:"value"`
 	} `json:"predefined_services"`
 
+	ZoneReplacementMap struct {
+		Description string    `json:"_description"`
+		Value       []ZoneMap `json:"value"`
+	} `json:"zone_replacement_map"`
+
+	AddressReplacementMap struct {
+		Description string       `json:"_description"`
+		Value       []ServiceMap `json:"value"`
+	} `json:"address_replacement_map"`
+
 	ServiceReplacementMap struct {
 		Description string       `json:"_description"`
 		Value       []ServiceMap `json:"value"`
 	} `json:"service_replacement_map"`
+}
+
+type ZoneMap struct {
+	Before string `json:"before"`
+	After  string `json:"after"`
 }
 
 type ServiceMap struct {
@@ -95,6 +116,8 @@ func NewDefaultAppConfig() *AppConfig {
 	cpCli.AccessRuleLayer.Value = "Network"
 	cpCli.AccessRuleSection.Description = "cli 出力時の access-rule を追加するセクション タイトル"
 	cpCli.AccessRuleSection.Value = "New rules"
+	cpCli.NatRulePackage.Description = "cli 出力時の nat-rule の package"
+	cpCli.NatRulePackage.Value = "standard"
 	cpCli.PredefinedServices.Description = "事前定義サービス名・サービス グループ名の配列"
 	cpCli.PredefinedServices.Value = []string{
 		"ICMP Protocol", "Instagram",
@@ -528,6 +551,15 @@ func NewDefaultAppConfig() *AppConfig {
 		"Web_Proxy",
 		"Yahoo_Messenger",
 	}
+	// TODO:
+	cpCli.ZoneReplacementMap.Description = "ゾーン名置換用マップ"
+	cpCli.ZoneReplacementMap.Value = []ZoneMap{
+		{Before: "LAN", After: "LANZone"},
+		{Before: "WAN", After: "WANZone"},
+		{Before: "DMZ", After: "DMZZone"},
+	}
+	cpCli.AddressReplacementMap.Description = "アドレス名置換用マップ"
+	cpCli.AddressReplacementMap.Value = []ServiceMap{}
 	cpCli.ServiceReplacementMap.Description = "サービス名置換用マップ"
 	cpCli.ServiceReplacementMap.Value = []ServiceMap{
 		{Before: "service-http", After: "http"},

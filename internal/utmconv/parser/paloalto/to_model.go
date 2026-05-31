@@ -43,7 +43,10 @@ func fillModel(app *model.App, palo *PaloAltoConfig) error {
 	}
 	slog.Info("ポリシーが変換されました", "count", len(app.Policies))
 
-	// app.NATRules, err = ...
+	if app.NATRules, err = ToModelNATs(palo.NATRules); err != nil {
+		return err
+	}
+	slog.Info("NAT ルールが変換されました", "count", len(app.NATRules))
 
 	return nil
 }
@@ -523,4 +526,179 @@ func extractProfiles(ps *ProfileSetting) []string {
 	}
 
 	return out
+}
+
+// TODO: かなり不完全な実装です
+func ToModelNATs(scopedNATs []ScopedNAT) ([]model.NATRule, error) {
+	var result []model.NATRule
+
+	scopeRulebase := func(scope, rulebase string) string {
+		if rulebase == "" {
+			return scope
+		}
+		return fmt.Sprintf("%s-%s", scope, rulebase)
+	}
+
+	for _, sn := range scopedNATs {
+		normalizeDesc := func(s string) string {
+			s = strings.TrimPrefix(s, "(implicit)")
+			return strings.TrimSpace(s)
+		}
+
+		rule := sn.NATRule
+
+		nat := model.NATRule{
+			ID: rule.UUID,
+
+			Name:        rule.Name,
+			Enabled:     rule.Disabled != "yes",
+			Description: normalizeDesc(rule.Description),
+			Tags:        rule.Tags,
+
+			FromZones: rule.FromZones,
+			ToZones:   rule.ToZones,
+
+			OriginalSource:      toAddr(rule.Sources),
+			OriginalDestination: toAddr(rule.Destinations),
+			OriginalService:     toServices(rule.Service),
+
+			TranslatedSource:      toTranslatedSource(rule),
+			TranslatedDestination: toTranslatedDestination(rule),
+			TranslatedService:     toTranslatedService(rule),
+
+			Type:          toNATType(rule),
+			BiDirectional: isBiDirectional(rule),
+
+			Scope: scopeRulebase(sn.Scope, sn.Rulebase),
+		}
+
+		result = append(result, nat)
+	}
+
+	return result, nil
+}
+
+// TODO: かなり不完全な実装です
+func toNATType(rule NATRule) model.NATType {
+	if rule.SourceTranslation != nil {
+		if rule.SourceTranslation.StaticIP != nil {
+			return model.NATTypeStatic
+		}
+
+		if rule.SourceTranslation.DynamicIPAndPort != nil {
+			return model.NATTypeHide
+		}
+	}
+
+	if rule.DestinationTranslation != nil &&
+		rule.DestinationTranslation.TranslatedPort != "" {
+		return model.NATTypePAT
+	}
+
+	if rule.DestinationTranslation != nil {
+		return model.NATTypeStatic
+	}
+
+	return model.NATTypeNoNAT
+}
+
+func isBiDirectional(rule NATRule) bool {
+	return rule.SourceTranslation != nil &&
+		rule.SourceTranslation.StaticIP != nil &&
+		rule.SourceTranslation.StaticIP.BiDirectional == "yes"
+}
+
+func toTranslatedSource(rule NATRule) []string {
+	if rule.SourceTranslation == nil {
+		return nil
+	}
+
+	if rule.SourceTranslation.StaticIP != nil {
+		return []string{
+			rule.SourceTranslation.StaticIP.TranslatedAddress,
+		}
+	}
+
+	if rule.SourceTranslation.DynamicIPAndPort != nil {
+		d := rule.SourceTranslation.DynamicIPAndPort
+
+		if len(d.TranslatedAddress) > 0 {
+			return d.TranslatedAddress
+		}
+
+		if d.InterfaceAddress != nil {
+			if d.InterfaceAddress.Ip != "" {
+				return []string{d.InterfaceAddress.Ip}
+			}
+			if d.InterfaceAddress.FloatingIp != "" {
+				return []string{d.InterfaceAddress.FloatingIp}
+			}
+			return []string{d.InterfaceAddress.Interface}
+		}
+	}
+
+	return nil
+}
+
+func toAddr(names []string) []string {
+	if len(names) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(names))
+	addrs := make([]string, 0, len(names))
+
+	for _, n := range names {
+		n = normalizeName(n)
+		if n == "" {
+			continue
+		}
+
+		// 重複排除
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+
+		addrs = append(addrs, n)
+	}
+
+	return addrs
+}
+
+func toTranslatedDestination(rule NATRule) []string {
+	if rule.DestinationTranslation == nil {
+		return nil
+	}
+
+	if rule.DestinationTranslation.TranslatedAddress == "" {
+		return nil
+	}
+
+	return []string{
+		rule.DestinationTranslation.TranslatedAddress,
+	}
+}
+
+func toTranslatedService(rule NATRule) []string {
+	if rule.DestinationTranslation == nil {
+		return nil
+	}
+
+	if rule.DestinationTranslation.TranslatedPort == "" {
+		return nil
+	}
+
+	return []string{
+		rule.DestinationTranslation.TranslatedPort,
+	}
+}
+
+func toServices(service string) []string {
+	if service == "" ||
+		service == "any" {
+		return nil
+	}
+
+	return []string{service}
 }
