@@ -59,6 +59,11 @@ type CheckPointCli struct {
 		Value       string `json:"value"`
 	} `json:"nat_rule_package"`
 
+	ThreatRuleLayer struct {
+		Description string `json:"_description"`
+		Value       string `json:"value"`
+	} `json:"threat_rule_layer"`
+
 	PredefinedServices struct {
 		Description string   `json:"_description"`
 		Value       []string `json:"value"`
@@ -118,6 +123,8 @@ func NewDefaultAppConfig() *AppConfig {
 	cpCli.AccessRuleSection.Value = "New rules"
 	cpCli.NatRulePackage.Description = "cli 出力時の nat-rule の package"
 	cpCli.NatRulePackage.Value = "standard"
+	cpCli.ThreatRuleLayer.Description = "cli 出力時の threat-rule の layer"
+	cpCli.ThreatRuleLayer.Value = "Threat Prevention"
 	cpCli.PredefinedServices.Description = "事前定義サービス名・サービス グループ名の配列"
 	cpCli.PredefinedServices.Value = []string{
 		"ICMP Protocol", "Instagram",

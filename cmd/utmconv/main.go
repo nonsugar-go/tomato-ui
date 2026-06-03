@@ -433,6 +433,15 @@ func main() {
 			slog.Info("Check Point の NAT 変換が終了しました",
 				"output", "checkpoint_nat.conf")
 
+			// 脅威ポリシーの変換は、app.Policies をもとに行う。
+			lines, err = conv_checkpoint.ConvertThreatPolicies(app.Policies, ctx)
+			if err != nil {
+				slog.Error("convert error:", "err", err)
+			}
+			writeMgmtLines("checkpoint_threat.conf", lines, app)
+			slog.Info("Check Point の脅威防御の変換が終了しました",
+				"output", "checkpoint_threat.conf")
+
 		default:
 			slog.Error("unsupported output", "to", app.To)
 		}

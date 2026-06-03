@@ -274,6 +274,13 @@ func ToModelPolicies(scopedSecurities []ScopedSecurity, appSvcMap []model.AppSvc
 			Group:    rule.GroupTag,
 
 			Scope: scopeRulebase(ss.Scope, ss.Rulebase),
+
+			Extensions: make(map[string]any),
+		}
+
+		if rule.ProfileSetting != nil && rule.ProfileSetting.Group != nil {
+			// 追加の拡張情報として、PaloAltoのセキュリティプロファイルグループを保持する
+			policy.Extensions["paloalto-profile-setting-group"] = rule.ProfileSetting.Group
 		}
 
 		result = append(result, policy)
