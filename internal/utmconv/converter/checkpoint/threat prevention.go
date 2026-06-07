@@ -106,9 +106,6 @@ func ConvertThreatPolicy(p model.Policy, ctx *Context) (string, error) {
 	sb.WriteString(buildIndexedKVWithDefaultAny("service", svc2))
 	sb.WriteString(` track "Log"`)
 	sb.WriteString(buildComment(p.Description))
-	if p.Description != "" && len(p.Tags) > 0 {
-		buildComment(p.Tags[0])
-	}
 
 	return sb.String(), errors.Join(errs...)
 }
