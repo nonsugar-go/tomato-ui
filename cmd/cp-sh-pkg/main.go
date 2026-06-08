@@ -15,14 +15,15 @@ import (
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/exporter/excel"
 )
 
+// Object
 type CPObject struct {
 	Uid  string `json:"uid"`
 	Name string `json:"name"`
 	Type string `json:"type"`
 
-	Comments string   `json:"comments,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
-	Color    string   `json:"color,omitempty"`
+	Comments string     `json:"comments,omitempty"`
+	Tags     []CPObject `json:"tags,omitempty"`
+	Color    string     `json:"color,omitempty"`
 
 	// host
 	IPv4Address string `json:"ipv4-address,omitempty"`
@@ -30,7 +31,9 @@ type CPObject struct {
 
 	// network
 	Subnet4     string `json:"subnet4,omitempty"`
-	MaskLength4 int32  `json:"mask-length4,omitempty"`
+	MaskLength4 int    `json:"mask-length4,omitempty"`
+	Subnet6     string `json:"subnet6,omitempty"`
+	MaskLength6 int    `json:"mask-length6"`
 
 	// dns-domain
 	IsSubDomain bool `json:"is-sub-domain,omitempty"`
@@ -43,22 +46,98 @@ type CPObject struct {
 	SourcePort string `json:"source-port,omitempty"`
 }
 
-func main() {
-	handler := log.New(os.Stderr)
-	handler.SetLevel(log.DebugLevel)
-	handler.SetReportTimestamp(true)
-	slog.SetDefault(slog.New(handler))
+// Access Rule
+type AccessRule struct {
+	Uid  string `json:"uid"`
+	Name string `json:"name"`
+	Type string `json:"type"`
 
-	var inDir string
-	var outFile string
-	flag.StringVar(&inDir, "dir", "./", "show package json files directory")
-	flag.StringVar(&outFile, "out", "check_point_param.xlsx", "output Excel file name")
+	// "access-section"
+	From int `json:"from,omitempty"`
+	To   int `json:"to,omitempty"`
 
-	flag.Parse()
+	// "access-rule"
+	Comments string     `json:"comments,omitempty"`
+	Tags     []CPObject `json:"tags,omitempty"`
 
-	slog.Info("json files directory", slog.String("dir", inDir))
-	slog.Info("output file", slog.String("file", outFile))
+	RuleNumber        int      `json:"rule-number,omitempty"`
+	Enabled           bool     `json:"enabled,omitempty"`
+	SourceNegate      bool     `json:"source-negate,omitempty"`
+	Source            []string `json:"source,omitempty"`
+	DestinationNegate bool     `json:"destination-negate,omitempty"`
+	Destination       []string `json:"destination,omitempty"`
+	ServiceNegate     bool     `json:"service-negate,omitempty"`
+	Service           []string `json:"service,omitempty"`
+	ServiceResource   string   `json:"service-resource,omitempty"`
+	ContentDirection  string   `json:"content-direction,omitempty"`
+	ContentNegate     bool     `json:"content-negate,omitempty"`
+	Content           []string `json:"content,omitempty"`
 
+	Vpn    []string `json:"vpn,omitempty"`
+	Action string   `json:"action,omitempty"`
+
+	Track struct {
+		PerSession            bool   `json:"per-session,omitempty"`
+		PerConnection         bool   `json:"per-connection,omitempty"`
+		Alert                 string `json:"alert,omitempty"`
+		EnableFirewallSession bool   `json:"enable-firewall-session,omitempty"`
+		Accounting            bool   `json:"accounting,omitempty"`
+		Type                  string `json:"type,omitempty"`
+	} `json:"track"`
+
+	InstallOn    []string `json:"install-on,omitempty"`
+	CustomFields struct {
+		Field1 string `json:"field-1,omitempty"`
+		Field2 string `json:"field-2,omitempty"`
+		Field3 string `json:"field-3,omitempty"`
+	} `json:"custom-fields"`
+}
+
+func joinNames(objs []CPObject) string {
+	var sb strings.Builder
+	for i, o := range objs {
+		sb.WriteString(o.Name)
+		if i != 0 {
+			sb.WriteRune(';')
+		}
+	}
+	return sb.String()
+}
+
+func parseAccessRules(e *excel.Excel, inDir string) {
+	pattern := filepath.Join(inDir, "* Network-Management server.json")
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		slog.Error("fail to find files",
+			slog.String("pattern", pattern), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	for _, file := range files {
+		ruleName := strings.TrimSuffix(filepath.Base(file), " Network-Management server.json")
+		var accessRules []AccessRule
+		jsonData, err := os.ReadFile(file)
+		if err != nil {
+			slog.Error("Faild to read a file", slog.String("filename", file), slog.String("error", err.Error()))
+			continue
+		}
+		err = json.Unmarshal(jsonData, &accessRules)
+		if err != nil {
+			slog.Error("JSON error", slog.String("error", err.Error()))
+			continue
+		}
+
+		e.NewSheet("Access RUles - " + ruleName)
+		e.Println("No", "Name", "Enabled", "Comments")
+		for _, r := range accessRules {
+			e.Println(strconv.Itoa(r.RuleNumber), r.Name, fmt.Sprintf("%t", r.Enabled),
+				r.Comments)
+		}
+		e.AddTable()
+	}
+}
+
+func parseCPObjects(e *excel.Excel, inDir string) {
 	pattern := filepath.Join(inDir, "*_objects.json")
 	files, err := filepath.Glob(pattern)
 	if err != nil {
@@ -139,36 +218,34 @@ func main() {
 		mapUidObj[obj.Uid] = obj
 	}
 
-	writeExcel(outFile, byType, mapUidObj)
+	writeCPObjectsExcel(e, byType, mapUidObj)
 }
 
-func writeExcel(fileName string, byType map[string][]*CPObject, mapUidObj map[string]*CPObject) error {
-	e := excel.NewExcel(fileName)
-	defer e.Close()
-
+func writeCPObjectsExcel(e *excel.Excel, byType map[string][]*CPObject, mapUidObj map[string]*CPObject) error {
 	e.NewSheet("host")
-	e.Println("Name", "IPv4", "Tag", "Comments")
+	e.Println("Name", "IPv4 Addr", "IPv6 Addr", "Tags", "Comments")
 	for _, o := range byType["host"] {
-		e.Println(o.Name, o.IPv4Address, strings.Join(o.Tags, ";"), o.Comments)
+		e.Println(o.Name, o.IPv4Address, o.IPv6Address, joinNames(o.Tags), o.Comments)
 	}
 	e.AddTable()
 
 	e.NewSheet("network")
-	e.Println("Name", "Subnet4", "Mask-length4", "Tag", "Comments")
+	e.Println("Name", "Subnet4", "len4", "Subnet6", "len6", "Tags", "Comments")
 	for _, o := range byType["network"] {
-		e.Println(o.Name, o.Subnet4, strconv.Itoa(int(o.MaskLength4)), strings.Join(o.Tags, ";"), o.Comments)
+		e.Println(o.Name, o.Subnet4, strconv.Itoa(o.MaskLength4), o.Subnet6, strconv.Itoa(o.MaskLength6),
+			joinNames(o.Tags), o.Comments)
 	}
 	e.AddTable()
 
 	e.NewSheet("dns-domain")
-	e.Println("Name", "Is-sub-domain", "Tag", "Comments")
+	e.Println("Name", "Is-sub-domain", "Tags", "Comments")
 	for _, o := range byType["dns-domain"] {
-		e.Println(o.Name, fmt.Sprintf("%t", o.IsSubDomain), strings.Join(o.Tags, ";"), o.Comments)
+		e.Println(o.Name, fmt.Sprintf("%t", o.IsSubDomain), joinNames(o.Tags), o.Comments)
 	}
 	e.AddTable()
 
 	e.NewSheet("group")
-	e.Println("Name", "members", "Tag", "Comments")
+	e.Println("Name", "members", "Tags", "Comments")
 	for _, o := range byType["group"] {
 		members := make([]string, 0, len(o.Members))
 		for _, uid := range o.Members {
@@ -184,11 +261,11 @@ func writeExcel(fileName string, byType map[string][]*CPObject, mapUidObj map[st
 		})
 
 		if len(members) == 0 {
-			e.Println(o.Name, "", strings.Join(o.Tags, ";"), o.Comments)
+			e.Println(o.Name, "", joinNames(o.Tags), o.Comments)
 		} else {
 			for i, m := range members {
 				if i == 0 {
-					e.Println(o.Name, m, strings.Join(o.Tags, ";"), o.Comments)
+					e.Println(o.Name, m, joinNames(o.Tags), o.Comments)
 				} else {
 					e.Println("", m)
 				}
@@ -198,21 +275,21 @@ func writeExcel(fileName string, byType map[string][]*CPObject, mapUidObj map[st
 	e.AddTable()
 
 	e.NewSheet("service-tcp")
-	e.Println("Name", "port", "source-port", "Tag", "Comments")
+	e.Println("Name", "port", "source-port", "Tags", "Comments")
 	for _, o := range byType["service-tcp"] {
-		e.Println(o.Name, o.Port, o.SourcePort, strings.Join(o.Tags, ";"), o.Comments)
+		e.Println(o.Name, o.Port, o.SourcePort, joinNames(o.Tags), o.Comments)
 	}
 	e.AddTable()
 
 	e.NewSheet("service-udp")
-	e.Println("Name", "port", "source-port", "Tag", "Comments")
+	e.Println("Name", "port", "source-port", "Tags", "Comments")
 	for _, o := range byType["service-udp"] {
-		e.Println(o.Name, o.Port, o.SourcePort, strings.Join(o.Tags, ";"), o.Comments)
+		e.Println(o.Name, o.Port, o.SourcePort, joinNames(o.Tags), o.Comments)
 	}
 	e.AddTable()
 
 	e.NewSheet("service-group")
-	e.Println("Name", "members", "Tag", "Comments")
+	e.Println("Name", "members", "Tags", "Comments")
 	for _, o := range byType["service-group"] {
 		members := make([]string, 0, len(o.Members))
 		for _, uid := range o.Members {
@@ -228,11 +305,11 @@ func writeExcel(fileName string, byType map[string][]*CPObject, mapUidObj map[st
 		})
 
 		if len(members) == 0 {
-			e.Println(o.Name, "", strings.Join(o.Tags, ";"), o.Comments)
+			e.Println(o.Name, "", joinNames(o.Tags), o.Comments)
 		} else {
 			for i, m := range members {
 				if i == 0 {
-					e.Println(o.Name, m, strings.Join(o.Tags, ";"), o.Comments)
+					e.Println(o.Name, m, joinNames(o.Tags), o.Comments)
 				} else {
 					e.Println("", m)
 				}
@@ -241,6 +318,28 @@ func writeExcel(fileName string, byType map[string][]*CPObject, mapUidObj map[st
 	}
 	e.AddTable()
 
-	slog.Info("Excel file saved", slog.String("file", fileName))
 	return nil
+}
+
+func main() {
+	handler := log.New(os.Stderr)
+	handler.SetLevel(log.DebugLevel)
+	handler.SetReportTimestamp(true)
+	slog.SetDefault(slog.New(handler))
+
+	var inDir string
+	var outFile string
+	flag.StringVar(&inDir, "dir", "./", "show package json files directory")
+	flag.StringVar(&outFile, "out", "check_point_param.xlsx", "output Excel file name")
+
+	flag.Parse()
+
+	slog.Info("json files directory", slog.String("dir", inDir))
+	slog.Info("output file", slog.String("file", outFile))
+
+	e := excel.NewExcel(outFile)
+	defer e.Close()
+	parseCPObjects(e, inDir)
+	parseAccessRules(e, inDir)
+	slog.Info("Excel file saved", slog.String("file", outFile))
 }
