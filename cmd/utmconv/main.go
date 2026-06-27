@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -13,6 +12,7 @@ import (
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/model"
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/parser/checkpoint"
 	"github.com/nonsugar-go/tomato-ui/internal/utmconv/parser/paloalto"
+	"github.com/pelletier/go-toml/v2"
 
 	"time"
 
@@ -217,7 +217,8 @@ func (m modelTUI) headerView() string {
 	) + "\n\n🍅 Ready!\n\n"
 }
 
-const appConfigFilename = "utmconv.json"
+// const appConfigFilename = "utmconv.json"
+const appConfigFilename = "utmconv.toml"
 
 func loadOrInitConfig(path string) (*model.AppConfig, error) {
 	pwd, _ := os.Getwd()
@@ -226,7 +227,12 @@ func loadOrInitConfig(path string) (*model.AppConfig, error) {
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		defaultCfg := model.NewDefaultAppConfig()
 
-		data, err := json.MarshalIndent(defaultCfg, "", "  ")
+		// data, err := json.MarshalIndent(defaultCfg, "", "  ")
+		// if err != nil {
+		// 	return nil, fmt.Errorf("failed to marshal default config: %w", err)
+		// }
+
+		data, err := toml.Marshal(defaultCfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal default config: %w", err)
 		}
@@ -247,7 +253,11 @@ func loadOrInitConfig(path string) (*model.AppConfig, error) {
 	}
 
 	var cfg model.AppConfig
-	if err := json.Unmarshal(file, &cfg); err != nil {
+	// if err := json.Unmarshal(file, &cfg); err != nil {
+	// 	return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	// }
+
+	if err := toml.Unmarshal(file, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 

@@ -320,10 +320,11 @@ func TestToModelPolicies(t *testing.T) {
 						Applications: []string{"any"},
 						Services:     model.ServiceRefs{{Name: "http"}, {Name: "https"}},
 					},
-					Action:  model.PolicyAction{Type: model.ActionAllow},
-					Logging: model.Logging{LogAtStart: false, LogAtEnd: true},
-					Tags:    []string{"linux", "rhel"},
-					Scope:   "shared",
+					Action:     model.PolicyAction{Type: model.ActionAllow},
+					Logging:    model.Logging{LogAtStart: false, LogAtEnd: true},
+					Tags:       []string{"linux", "rhel"},
+					Scope:      "shared",
+					Extensions: make(map[string]any),
 				},
 			},
 			wantErr: false,
@@ -336,9 +337,10 @@ func TestToModelPolicies(t *testing.T) {
 			},
 			want: []model.Policy{
 				{Name: "Log Start yes", Enabled: true,
-					Action:  model.PolicyAction{Type: model.ActionAllow},
-					Logging: model.Logging{LogAtStart: true, LogAtEnd: true, LogProfile: "log_prof1"},
-					Scope:   "dg1-pre",
+					Action:     model.PolicyAction{Type: model.ActionAllow},
+					Logging:    model.Logging{LogAtStart: true, LogAtEnd: true, LogProfile: "log_prof1"},
+					Scope:      "dg1-pre",
+					Extensions: make(map[string]any),
 				},
 			},
 			wantErr: false,
@@ -349,10 +351,10 @@ func TestToModelPolicies(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ToModelPolicies(tt.in, app.AppConfig.PaloAlto.Conf.ApplicationDefaultReplacementMap.Value)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("ToModelPolicies() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("ToModelPolicies() error = %v, wantErr = %v", err, tt.wantErr)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("ToModelPolicies() \ngot = %#v,\nwant %#v", got, tt.want)
+				t.Fatalf("ToModelPolicies() \ngot = %#v,\nwant = %#v", got, tt.want)
 			}
 		})
 	}

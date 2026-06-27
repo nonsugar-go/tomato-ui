@@ -14,118 +14,212 @@ type App struct {
 	NATRules      []NATRule
 }
 
+// type AppConfig struct {
+// 	Description string           `json:"_description"`
+// 	CheckPoint  CheckPointConfig `json:"checkpoint"`
+// 	PaloAlto    PaloAltoConfig   `json:"paloalto"`
+// }
+
+// type CheckPointConfig struct {
+// 	Cli CheckPointCli `json:"cli"`
+// }
+
+// type PaloAltoConfig struct {
+// 	Conf PaloAltoConf `json:"conf"`
+// }
+
+// type CheckPointCli struct {
+// 	MgmtCliUser struct {
+// 		Description string `json:"_description"`
+// 		Value       string `json:"value"`
+// 	} `json:"mgmt_cli_user"`
+
+// 	MgmtCliPassword struct {
+// 		Description string `json:"_description"`
+// 		Value       string `json:"value"`
+// 	} `json:"mgmt_cli_password"`
+
+// 	IgnoreWarnings struct {
+// 		Description string `json:"_description"`
+// 		Value       bool   `json:"value"`
+// 	} `json:"ignore-warnings"`
+
+// 	AccessRuleLayer struct {
+// 		Description string `json:"_description"`
+// 		Value       string `json:"value"`
+// 	} `json:"access_rule_layer"`
+
+// 	AccessRuleSection struct {
+// 		Description string `json:"_description"`
+// 		Value       string `json:"value"`
+// 	} `json:"access_rule_section"`
+
+// 	NatRulePackage struct {
+// 		Description string `json:"_description"`
+// 		Value       string `json:"value"`
+// 	} `json:"nat_rule_package"`
+
+// 	ThreatRuleLayer struct {
+// 		Description string `json:"_description"`
+// 		Value       string `json:"value"`
+// 	} `json:"threat_rule_layer"`
+
+// 	PredefinedServices struct {
+// 		Description string   `json:"_description"`
+// 		Value       []string `json:"value"`
+// 	} `json:"predefined_services"`
+
+// 	ZoneReplacementMap struct {
+// 		Description string    `json:"_description"`
+// 		Value       []ZoneMap `json:"value"`
+// 	} `json:"zone_replacement_map"`
+
+// 	AddressReplacementMap struct {
+// 		Description string       `json:"_description"`
+// 		Value       []ServiceMap `json:"value"`
+// 	} `json:"address_replacement_map"`
+
+// 	ServiceReplacementMap struct {
+// 		Description string       `json:"_description"`
+// 		Value       []ServiceMap `json:"value"`
+// 	} `json:"service_replacement_map"`
+// }
+
+// type ZoneMap struct {
+// 	Before string `json:"before"`
+// 	After  string `json:"after"`
+// }
+
+// type ServiceMap struct {
+// 	Before string `json:"before"`
+// 	After  string `json:"after"`
+// }
+
+// type PaloAltoConf struct {
+// 	ApplicationDefaultReplacementMap struct {
+// 		Description string      `json:"_description"`
+// 		Value       []AppSvcMap `json:"value"`
+// 	} `json:"application_default_replacement_map"`
+// }
+
+// type AppSvcMap struct {
+// 	Application string   `json:"application"`
+// 	Services    []string `json:"services"`
+// }
+
 type AppConfig struct {
-	Description string           `json:"_description"`
-	CheckPoint  CheckPointConfig `json:"checkpoint"`
-	PaloAlto    PaloAltoConfig   `json:"paloalto"`
+	// Description string           `json:"_description" toml:"-"`
+	CheckPoint CheckPointConfig `json:"checkpoint" toml:"checkpoint" comment:"Check Point"`
+	PaloAlto   PaloAltoConfig   `json:"paloalto" toml:"paloalto" comment:"PaloAlto"`
 }
 
 type CheckPointConfig struct {
-	Cli CheckPointCli `json:"cli"`
+	Cli CheckPointCli `json:"cli" toml:"cli" comment:"Check Point の CLI"`
 }
 
 type PaloAltoConfig struct {
-	Conf PaloAltoConf `json:"conf"`
+	Conf PaloAltoConf `json:"conf" toml:"conf" comment:"PaloAlto の Conf"`
 }
 
 type CheckPointCli struct {
 	MgmtCliUser struct {
-		Description string `json:"_description"`
-		Value       string `json:"value"`
-	} `json:"mgmt_cli_user"`
+		// Description string `json:"_description" toml:"-"`
+		Value string `json:"value" toml:"value"`
+	} `json:"mgmt_cli_user" toml:"mgmt_cli_user" comment:"mgmt_cli tool のユーザー名"`
 
 	MgmtCliPassword struct {
-		Description string `json:"_description"`
-		Value       string `json:"value"`
-	} `json:"mgmt_cli_password"`
+		// Description string `json:"_description" toml:"-"`
+		Value string `json:"value" toml:"value"`
+	} `json:"mgmt_cli_password" toml:"mgmt_cli_password" comment:"mgmt_cli tool のパスワード"`
 
 	IgnoreWarnings struct {
-		Description string `json:"_description"`
-		Value       bool   `json:"value"`
-	} `json:"ignore-warnings"`
+		// Description string `json:"_description" toml:"-"`
+		Value bool `json:"value" toml:"value"`
+	} `json:"ignore-warnings" toml:"ignore-warnings" comment:"mgmt_cli tool に ignore-warnings true を付加するかどうか？"`
 
 	AccessRuleLayer struct {
-		Description string `json:"_description"`
-		Value       string `json:"value"`
-	} `json:"access_rule_layer"`
+		// Description string `json:"_description" toml:"-"`
+		Value string `json:"value" toml:"value"`
+	} `json:"access_rule_layer" toml:"access_rule_layer" comment:"cli 出力時の access-rule の layer"`
 
 	AccessRuleSection struct {
-		Description string `json:"_description"`
-		Value       string `json:"value"`
-	} `json:"access_rule_section"`
+		// Description string `json:"_description" toml:"-"`
+		Value string `json:"value" toml:"value"`
+	} `json:"access_rule_section" toml:"access_rule_section" comment:"cli 出力時の access-rule を追加するセクション タイトル"`
 
 	NatRulePackage struct {
-		Description string `json:"_description"`
-		Value       string `json:"value"`
-	} `json:"nat_rule_package"`
+		// Description string `json:"_description" toml:"-"`
+		Value string `json:"value" toml:"value"`
+	} `json:"nat_rule_package" toml:"nat_rule_package" comment:"cli 出力時の nat-rule の package"`
 
 	ThreatRuleLayer struct {
-		Description string `json:"_description"`
-		Value       string `json:"value"`
-	} `json:"threat_rule_layer"`
+		// Description string `json:"_description" toml:"-"`
+		Value string `json:"value" toml:"value"`
+	} `json:"threat_rule_layer" toml:"threat_rule_layer" comment:"cli 出力時の threat-rule の layer"`
 
 	PredefinedServices struct {
-		Description string   `json:"_description"`
-		Value       []string `json:"value"`
-	} `json:"predefined_services"`
+		// Description string   `json:"_description" toml:"-"`
+		Value []string `json:"value" toml:"value,multiline"`
+	} `json:"predefined_services" toml:"predefined_services" comment:"事前定義サービス名・サービス グループ名の配列"`
 
 	ZoneReplacementMap struct {
-		Description string    `json:"_description"`
-		Value       []ZoneMap `json:"value"`
-	} `json:"zone_replacement_map"`
+		// Description string    `json:"_description" toml:"-"`
+		Value []ZoneMap `json:"value" toml:"value"`
+	} `json:"zone_replacement_map" toml:"zone_replacement_map" comment:"ゾーン名置換用マップ"`
 
 	AddressReplacementMap struct {
-		Description string       `json:"_description"`
-		Value       []ServiceMap `json:"value"`
-	} `json:"address_replacement_map"`
+		// Description string       `json:"_description" toml:"-"`
+		Value []ServiceMap `json:"value" toml:"value"`
+	} `json:"address_replacement_map" toml:"address_replacement_map" comment:"アドレス名置換用マップ"`
 
 	ServiceReplacementMap struct {
-		Description string       `json:"_description"`
-		Value       []ServiceMap `json:"value"`
-	} `json:"service_replacement_map"`
+		// Description string       `json:"_description" toml:"-"`
+		Value []ServiceMap `json:"value" toml:"value"`
+	} `json:"service_replacement_map" toml:"service_replacement_map" comment:"サービス名置換用マップ"`
 }
 
 type ZoneMap struct {
-	Before string `json:"before"`
-	After  string `json:"after"`
+	Before string `json:"before" toml:"before"`
+	After  string `json:"after" toml:"after"`
 }
 
 type ServiceMap struct {
-	Before string `json:"before"`
-	After  string `json:"after"`
+	Before string `json:"before" toml:"before"`
+	After  string `json:"after" toml:"after"`
 }
 
 type PaloAltoConf struct {
 	ApplicationDefaultReplacementMap struct {
-		Description string      `json:"_description"`
-		Value       []AppSvcMap `json:"value"`
-	} `json:"application_default_replacement_map"`
+		// Description string      `json:"_description" toml:"-"`
+		Value []AppSvcMap `json:"value" toml:"value"`
+	} `json:"application_default_replacement_map" toml:"application_default_replacement_map" comment:"サービスが application-default または any のときのサービス名置換用マップ"`
 }
 
 type AppSvcMap struct {
-	Application string   `json:"application"`
-	Services    []string `json:"services"`
+	Application string   `json:"application" toml:"application"`
+	Services    []string `json:"services" toml:"services"`
 }
 
 func NewDefaultAppConfig() *AppConfig {
-	cfg := AppConfig{Description: "utmconv の設定ファイル"}
+	// cfg := AppConfig{Description: "utmconv の設定ファイル"}
+	cfg := AppConfig{}
 
 	cpCli := CheckPointCli{}
-	cpCli.MgmtCliUser.Description = "mgmt_cli tool のユーザー名"
+	// cpCli.MgmtCliUser.Description = "mgmt_cli tool のユーザー名"
 	cpCli.MgmtCliUser.Value = "secadmin"
-	cpCli.MgmtCliPassword.Description = "mgmt_cli tool のパスワード"
+	// cpCli.MgmtCliPassword.Description = "mgmt_cli tool のパスワード"
 	cpCli.MgmtCliPassword.Value = "Lab@12345"
-	cpCli.IgnoreWarnings.Description = "mgmt_cli tool に ignore-warnings true を付加するかどうか？"
+	// cpCli.IgnoreWarnings.Description = "mgmt_cli tool に ignore-warnings true を付加するかどうか？"
 	cpCli.IgnoreWarnings.Value = true
-	cpCli.AccessRuleLayer.Description = "cli 出力時の access-rule の layer"
+	// cpCli.AccessRuleLayer.Description = "cli 出力時の access-rule の layer"
 	cpCli.AccessRuleLayer.Value = "Network"
-	cpCli.AccessRuleSection.Description = "cli 出力時の access-rule を追加するセクション タイトル"
+	// cpCli.AccessRuleSection.Description = "cli 出力時の access-rule を追加するセクション タイトル"
 	cpCli.AccessRuleSection.Value = "New rules"
-	cpCli.NatRulePackage.Description = "cli 出力時の nat-rule の package"
+	// cpCli.NatRulePackage.Description = "cli 出力時の nat-rule の package"
 	cpCli.NatRulePackage.Value = "standard"
-	cpCli.ThreatRuleLayer.Description = "cli 出力時の threat-rule の layer"
+	// cpCli.ThreatRuleLayer.Description = "cli 出力時の threat-rule の layer"
 	cpCli.ThreatRuleLayer.Value = "Threat Prevention"
-	cpCli.PredefinedServices.Description = "事前定義サービス名・サービス グループ名の配列"
+	// cpCli.PredefinedServices.Description = "事前定義サービス名・サービス グループ名の配列"
 	cpCli.PredefinedServices.Value = []string{
 		"ICMP Protocol", "Instagram",
 		// Check Point の事前定義済みサービス (tcp)
@@ -559,15 +653,15 @@ func NewDefaultAppConfig() *AppConfig {
 		"Yahoo_Messenger",
 	}
 	// TODO:
-	cpCli.ZoneReplacementMap.Description = "ゾーン名置換用マップ"
+	// cpCli.ZoneReplacementMap.Description = "ゾーン名置換用マップ"
 	cpCli.ZoneReplacementMap.Value = []ZoneMap{
 		{Before: "LAN", After: "LANZone"},
 		{Before: "WAN", After: "WANZone"},
 		{Before: "DMZ", After: "DMZZone"},
 	}
-	cpCli.AddressReplacementMap.Description = "アドレス名置換用マップ"
+	// cpCli.AddressReplacementMap.Description = "アドレス名置換用マップ"
 	cpCli.AddressReplacementMap.Value = []ServiceMap{}
-	cpCli.ServiceReplacementMap.Description = "サービス名置換用マップ"
+	// cpCli.ServiceReplacementMap.Description = "サービス名置換用マップ"
 	cpCli.ServiceReplacementMap.Value = []ServiceMap{
 		{Before: "service-http", After: "http"},
 		{Before: "service-https", After: "https"},
@@ -575,7 +669,7 @@ func NewDefaultAppConfig() *AppConfig {
 	cfg.CheckPoint.Cli = cpCli
 
 	paConf := PaloAltoConf{}
-	paConf.ApplicationDefaultReplacementMap.Description = "サービスが application-default または any のときのサービス名置換用マップ"
+	// paConf.ApplicationDefaultReplacementMap.Description = "サービスが application-default または any のときのサービス名置換用マップ"
 	paConf.ApplicationDefaultReplacementMap.Value = []AppSvcMap{
 		{Application: "icmp", Services: []string{"ICMP Protocol"}}, // check point のサービス icmp-proto は返答を許可が無効、Accounting もできない
 		{Application: "ping", Services: []string{"echo-request"}},
