@@ -307,9 +307,9 @@ func main() {
 	}
 	app.AppConfig = *cfg
 
-	flag.StringVar(&app.Filename, "in", "", "comfig file")
+	flag.StringVar(&app.Filename, "in", "", "config file")
 	flag.StringVar(&app.Vendor, "vendor", "panorama", "vendor type")
-	flag.StringVar(&app.To, "to", "cp", "output format")
+	flag.StringVar(&app.To, "to", "", "output format")
 	flag.Parse()
 
 	p := tea.NewProgram(initialModel())
@@ -387,7 +387,7 @@ func main() {
 	switch app.Vendor {
 	case "panorama":
 		paloalto.ParsePanorama(&app)
-		slog.Info("Panorama の解析が終了しました", "output", "panorama.xlsx")
+		slog.Info("Panorama の解析が終了しました", "output", "panorama_param.xlsx")
 		switch app.To {
 		case "":
 			slog.Info("変換しないが選択されました。処理を終了します")
@@ -457,7 +457,13 @@ func main() {
 		}
 	case "cp":
 		checkpoint.ParseCheckPoint(&app)
-		slog.Info("Check Point の解析が終了しました", "output", "checkpoint.xlsx")
+		slog.Info("Check Point の解析が終了しました", "output", "checkpoint_param.xlsx")
+		switch app.To {
+		case "":
+			slog.Info("変換しないが選択されました。処理を終了します")
+		default:
+			slog.Error("unsupported output", "to", app.To)
+		}
 	default:
 		slog.Error("Vendor の指定は未実装です", "vendor", app.Vendor)
 	}

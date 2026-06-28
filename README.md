@@ -22,25 +22,28 @@ _____                          _             _   _ ___
 
 #### 対象
 
-- [X] PaloAlto (Panorama 含む)
+- [X] PaloAlto (現状は Panorama のみ)
+- [X] Check Point
 - [ ] FortiGate
-- [ ] Check Point
 
 #### 使用方法
 
 ```bash
-utmconv -in panorama.xml -to cp -ignore-warnings
+utmconv -vendor pa -in panorama.xml -to cp
+
+utmconv -vendor cp -in show_package-YYYY-mm-dd_HH-MM-SS.tar.gz
 ```
 
 #### 出力ファイル (例)
 
-- [X] panorama.xlsx: Panorama 解析結果の Excel 出力
+- [X] panorama_param.xlsx: Panorama 解析結果の Excel 出力
 - [X] checkpoint_address.conf: Check Point 用のコンフィグ (host / network)
 - [X] checkpoint_address_group.conf: Check Point 用のコンフィグ (address-group)
 - [X] checkpoint_service.conf: Check Point 用のコンフィグ (service)
 - [X] checkpoint_service_group.conf: Check Point 用のコンフィグ (service-group)
-- [ ] checkpoint_policy.conf: Check Point 用のコンフィグ (policy)
-- [ ] checkpoint_nat.conf: Check Point 用のコンフィグ (nat)
+- [X] checkpoint_policy.conf: Check Point 用のコンフィグ (policy)
+- [X] checkpoint_nat.conf: Check Point 用のコンフィグ (nat)
+- [X] checkpoint_param.xlsx: Check Point 解析結果の Excel 出力
 
 ### vm-tui
 
@@ -76,13 +79,10 @@ cp-dump hosts --server 1.2.3.4 --user admin --password xxx
 cp-dump rules --layer "Network"
 ```
 
-| Resource | Description           |
-| -------- | --------------------- |
-| hosts    | ホストオブジェクト      |
-| networks | ネットワークオブジェクト |
-| groups   | グループ                |
-| services | サービス（tcp/udpなど） |
-| rules    | アクセスルール          |
-| nat      | NATルール              |
-| all      | すべて取得             |
-
+- [ ] hosts: ホストオブジェクト
+- [ ] networks: ネットワークオブジェクト
+- [ ] groups: グループ
+- [ ] services: サービス（tcp/udpなど）
+- [ ] rules: アクセスルール 
+- [ ] nat: NATルール
+- [ ] all: すべて取得

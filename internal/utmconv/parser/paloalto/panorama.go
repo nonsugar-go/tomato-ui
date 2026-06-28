@@ -466,7 +466,7 @@ func ParsePanorama(app *model.App) {
 	panoramaConfig := BuildPaloAltoConfig(config)
 	fillModel(app, panoramaConfig)
 
-	e := excel.NewExcel("panorama.xlsx")
+	e := excel.NewExcel("panorama_param.xlsx")
 	defer e.Close()
 
 	e.NewSheet("Tags")

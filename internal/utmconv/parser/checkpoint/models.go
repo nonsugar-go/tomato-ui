@@ -1,4 +1,4 @@
-package main
+package checkpoint
 
 // Base Check Point Object
 type BaseCPObject struct {
